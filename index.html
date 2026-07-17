@@ -1,24 +1,39 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Combat Airball v0.9</title>
-<link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Combat Airball Prototype 2.0</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="shell">
-  <header>
-    <div><b>COMBAT AIRBALL</b><span>v0.9 — 2v2 Height Bands</span></div>
-    <div id="score">BLUE 0 — 0 RED</div>
-  </header>
-  <main><canvas id="game" width="1100" height="700"></canvas></main>
-  <div class="help">移動: WASD / 矢印　J: 武器　K: キック　L: ジャンプ / 壁ジャンプ　R: リセット</div>
-  <div class="mobile">
-    <div id="stick" class="stick"><div id="knob" class="knob"></div></div>
-    <div class="buttons"><button id="btnA">A<small>武器</small></button><button id="btnB">B<small>キック</small></button><button id="btnC">C<small>ジャンプ</small></button></div>
-  </div>
-</div>
-<script src="game.js"></script>
+  <main class="app">
+    <header class="hud">
+      <div class="title">COMBAT AIRBALL</div>
+      <div class="score"><span class="blue">BLUE <b id="blueScore">0</b></span><span>–</span><span class="red"><b id="redScore">0</b> RED</span></div>
+    </header>
+
+    <section class="game-wrap">
+      <canvas id="game" width="960" height="620" aria-label="Combat Airball game canvas"></canvas>
+      <div class="status" id="status">A: 武器　B: キック　C: ジャンプ</div>
+    </section>
+
+    <section class="controls">
+      <div class="pad" id="pad">
+        <button class="left" data-key="ArrowLeft">◀</button>
+        <button class="right" data-key="ArrowRight">▶</button>
+      </div>
+      <div class="buttons">
+        <button class="a" data-key="KeyJ"><strong>A</strong><span>武器</span></button>
+        <button class="b" data-key="KeyK"><strong>B</strong><span>キック</span></button>
+        <button class="c" data-key="KeyL"><strong>C</strong><span>ジャンプ</span></button>
+      </div>
+    </section>
+
+    <footer>
+      移動: A/D・←/→　J: 武器　K: キック/空中ボレー　L: ジャンプ/壁ジャンプ　R: リセット
+    </footer>
+  </main>
+  <script src="game.js"></script>
 </body>
 </html>
