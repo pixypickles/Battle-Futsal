@@ -1,4 +1,4 @@
-# Combat Airball v0.6 — Aerial Control
+# Combat Airball v0.7 — Wall Kick Lines
 
 - ジャンプ入力を約0.85秒先行受付
 - 空中でジャンプを押し続けると、次の着地で最大ジャンプ
