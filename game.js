@@ -83,63 +83,115 @@
       const ballOwner=ball.owner;
       const ownGoalY=this.team==='blue'?GOAL.y:-GOAL.y;
       const attackGoalY=this.team==='blue'?-GOAL.y:GOAL.y;
+      const attackDir=this.team==='blue'?-1:1;
       let tx=this.x, ty=this.y;
 
       if(this.hasBall){
         const nearest=nearestActor(this,foes);
         const danger=nearest?dist(this,nearest):999;
         const shotDist=Math.hypot(this.x,attackGoalY-this.y);
-        if(shotDist<255 && danger>70){
+        const openMate=bestOpenPassTarget(this,mates,foes);
+
+        // AI should shoot decisively when it has a reasonable lane. Full charge is reserved
+        // for genuinely open chances, so it does not stand still waiting to be hit.
+        if(shotDist<340 && (danger>58 || shotDist<175)){
           this.chargeB=Math.min(.62,this.chargeB+dt);
           this.holdB=true;
-          this.vx*=.72; this.vy*=.72;
-          if(this.chargeB>(danger>145?.48:.18)){
+          this.vx*=.68; this.vy*=.68;
+          const needed=danger>150?.42:danger>95?.24:.08;
+          if(this.chargeB>=needed){
+            this.facing=Math.atan2(attackGoalY-this.y,-this.x);
             this.shoot(this.chargeB); this.holdB=false; this.chargeB=0;
           }
           return;
         }
-        if(danger<72 && mates.length){
-          const mate=mates[0];
-          this.facing=Math.atan2(mate.y-this.y,mate.x-this.x);
-          this.pass(.18);
+
+        // Pass before being surrounded, preferably to the player or a clearly advanced mate.
+        if((danger<92 || Math.abs(this.x)>225) && openMate){
+          this.facing=Math.atan2(openMate.y-this.y,openMate.x-this.x);
+          this.pass(danger<65?.08:.22);
           return;
         }
-        tx=clamp(-this.x*.2,-100,100); ty=attackGoalY*.82;
+
+        // Carry diagonally toward goal instead of running straight into the defender.
+        const avoid=nearest?Math.sign(this.x-nearest.x||1)*72:0;
+        tx=clamp(-this.x*.30+avoid,-155,155);
+        ty=attackGoalY*.86;
       } else if(ballOwner && ballOwner.team===this.team){
+        // Support the carrier from the goal-side/front side. This creates a passing lane and
+        // makes the support AI physically screen defenders instead of trailing behind.
+        const carrier=ballOwner;
+        const threat=nearestActor(carrier,foes);
         if(this.role==='support'){
-          const threat=nearestActor(ballOwner,foes);
-          if(threat){
-            tx=threat.x+(ballOwner.x-threat.x)*.35;
-            ty=threat.y+(ballOwner.y-threat.y)*.35;
-            if(dist(this,threat)<90){ this.facing=Math.atan2(threat.y-this.y,threat.x-this.x); this.bash(); }
+          if(threat && dist(threat,carrier)<175){
+            const towardGoal={x:-carrier.x,y:attackGoalY-carrier.y};
+            const g=norm(towardGoal.x,towardGoal.y);
+            tx=carrier.x+g.x*72;
+            ty=carrier.y+g.y*72;
+            // If a defender is already close, attack it directly and clear the shooting lane.
+            if(dist(this,threat)<112){
+              this.facing=Math.atan2(threat.y-this.y,threat.x-this.x);
+              if(this.coolB<=0)this.bash(); else this.slash();
+            }
+          } else {
+            // Move into an open diagonal passing position ahead of the carrier.
+            tx=clamp(carrier.x+(carrier.x<=0?105:-105),-220,220);
+            ty=clamp(carrier.y+attackDir*115,-245,245);
           }
         } else {
-          tx=ballOwner.x+(this.team==='blue'?-55:55);
-          ty=ballOwner.y+(this.team==='blue'?-95:95);
+          tx=clamp(carrier.x+(carrier.x<=0?95:-95),-220,220);
+          ty=clamp(carrier.y+attackDir*125,-245,245);
         }
       } else if(ballOwner && ballOwner.team!==this.team){
         const carrier=ballOwner;
+        // Defend from the goal side, so the AI cuts off the shot instead of chasing from behind.
+        const goalSide=norm(-carrier.x,ownGoalY-carrier.y);
+        const interceptX=carrier.x+goalSide.x*62;
+        const interceptY=carrier.y+goalSide.y*62;
         if(this.role==='support'){
-          tx=carrier.x; ty=carrier.y;
-          if(dist(this,carrier)<96){ this.facing=Math.atan2(carrier.y-this.y,carrier.x-this.x); this.bash(); }
+          tx=interceptX; ty=interceptY;
+          if(dist(this,carrier)<108){
+            this.facing=Math.atan2(carrier.y-this.y,carrier.x-this.x);
+            if(this.coolB<=0)this.bash(); else this.slash();
+          }
         } else {
           tx=carrier.x; ty=carrier.y;
-          if(dist(this,carrier)<92){ this.facing=Math.atan2(carrier.y-this.y,carrier.x-this.x); this.slash(); }
+          if(dist(this,carrier)<96){ this.facing=Math.atan2(carrier.y-this.y,carrier.x-this.x); this.slash(); }
         }
       } else {
-        const nearestToBall=nearestActor(ball,actors.filter(a=>a.team===this.team));
-        if(nearestToBall===this || this.role==='striker') { tx=ball.x; ty=ball.y; }
-        else {
-          tx=ball.x*.45;
-          ty=clamp(ball.y+(this.team==='blue'?95:-95),-230,230);
+        const teammates=actors.filter(a=>a.team===this.team);
+        const nearestToBall=nearestActor(ball,teammates);
+        const ballSpeed=Math.hypot(ball.vx,ball.vy);
+        // The closest teammate always commits to the loose ball. Support also commits when the
+        // ball is slow or in its own half, preventing the ally from watching recoverable balls.
+        const ownHalf=this.team==='blue'?ball.y>0:ball.y<0;
+        if(nearestToBall===this || (this.role==='support'&&(ballSpeed<185||ownHalf))){
+          const lead=.16;
+          tx=ball.x+ball.vx*lead; ty=ball.y+ball.vy*lead;
+        } else {
+          tx=clamp(ball.x*.42,-150,150);
+          ty=clamp(ball.y-attackDir*105,-230,230);
         }
       }
 
-      const n=norm(tx-this.x,ty-this.y);
-      this.vx=n.x*this.speed; this.vy=n.y*this.speed;
-      if(Math.hypot(tx-this.x,ty-this.y)>12)this.facing=Math.atan2(n.y,n.x);
-      if(this.role==='support' && !ballOwner && dist(this,ball)<85 && !ball.owner) this.slash();
-      if(Math.abs(this.y-ownGoalY)<60 && this.role==='support') this.guard=true;
+      const dx=tx-this.x,dy=ty-this.y;
+      const distance=Math.hypot(dx,dy);
+      if(distance>9){
+        const n=norm(dx,dy);
+        this.vx=n.x*this.speed; this.vy=n.y*this.speed;
+        this.facing=Math.atan2(n.y,n.x);
+      } else { this.vx*=.72; this.vy*=.72; }
+
+      if(this.role==='support' && !ballOwner && dist(this,ball)<88 && !ball.owner && ball.z<30){
+        this.facing=Math.atan2(ball.y-this.y,ball.x-this.x);
+        this.slash();
+      }
+      // Emergency goal-line behavior: face the ball and guard when the carrier is about to shoot.
+      if(Math.abs(this.y-ownGoalY)<92 && this.role==='support'){
+        const threat=ball.owner&&ball.owner.team!==this.team?ball.owner:ball;
+        this.facing=Math.atan2(threat.y-this.y,threat.x-this.x);
+        this.guard=true;
+      }
     }
     slash(){ if(this.coolA>0||this.stun>0)return; this.coolA=.48; strike(this,91,.58,430,'SLASH'); pokeBall(this,185); }
     bash(){ if(this.coolB>0||this.stun>0)return; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.82,620,'BASH'); pokeBall(this,280); }
@@ -181,6 +233,22 @@
   function bestPassTarget(actor){
     const mates=actors.filter(a=>a.team===actor.team&&a!==actor&&a.stun<=0);
     return nearestActor({x:actor.x,y:actor.y+(actor.team==='blue'?-110:110)},mates);
+  }
+  function bestOpenPassTarget(actor,mates,foes){
+    let best=null,bestScore=-Infinity;
+    const attackDir=actor.team==='blue'?-1:1;
+    for(const mate of mates){
+      if(mate.stun>0)continue;
+      const nearestFoe=nearestActor(mate,foes);
+      const space=nearestFoe?dist(mate,nearestFoe):260;
+      const progress=(mate.y-actor.y)*attackDir;
+      const range=dist(actor,mate);
+      if(range>360)continue;
+      const playerBonus=mate.isPlayer?42:0;
+      const score=space*.72+progress*.48-range*.18+playerBonus;
+      if(score>bestScore){bestScore=score;best=mate;}
+    }
+    return best;
   }
   function angleDiff(a,b){ return Math.atan2(Math.sin(a-b),Math.cos(a-b)); }
 
