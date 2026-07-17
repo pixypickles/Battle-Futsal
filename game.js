@@ -54,8 +54,8 @@ const GRAVITY = 0.31;
 const BALL_GRAVITY = 0.12;
 const FLOOR_BOUNCE = 0.36;
 const MAX_BALL_SPEED = 9.2;
-const KICK_COOLDOWN = 22;
-const ATTACK_COOLDOWN = 40;
+const KICK_COOLDOWN = 12;
+const ATTACK_COOLDOWN = 22;
 
 const rand = (a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -69,10 +69,10 @@ class Player {
     this.onGround=true; this.wall=0; this.wallTimer=0;
     this.jumpBuffer=0; this.kickTimer=0; this.attackTimer=0;
     this.airJumpAvailable=true;
-    this.stun=0; this.anim=0; this.pose="idle";
+    this.stun=0; this.hitFlash=0; this.anim=0; this.pose="idle";
   }
   update() {
-    if(this.stun>0){this.stun--; this.vx*=.96;}
+    if(this.stun>0){this.stun--; this.vx*=.96;} if(this.hitFlash>0)this.hitFlash--;
     if(this.kickTimer>0)this.kickTimer--;
     if(this.attackTimer>0)this.attackTimer--;
     if(this.jumpBuffer>0)this.jumpBuffer--;
@@ -81,16 +81,16 @@ class Player {
     if(!this.ai){
       move=(keys.has("ArrowRight")||keys.has("KeyD")?1:0)-(keys.has("ArrowLeft")||keys.has("KeyA")?1:0);
       jump=pressed.has("KeyL")||pressed.has("Space");
-      kick=pressed.has("KeyK");
-      attack=pressed.has("KeyJ");
+      kick=(!this.onGround && keys.has("KeyK")) || pressed.has("KeyK");
+      attack=(!this.onGround && keys.has("KeyJ")) || pressed.has("KeyJ");
     } else {
       const target = predictBall();
       const dx = target.x - this.x;
       move=Math.abs(dx)>42?Math.sign(dx):0;
       const threat = Math.abs(ball.x-this.x)<170 && ball.y<this.y-35;
       jump=(this.onGround && (threat || Math.random()<.008)) || (this.wall && Math.random()<.04);
-      kick=Math.abs(ball.x-this.x)<75 && Math.abs(ball.y-this.y)<78 && Math.random()<.14;
-      attack=this.y<arena.floor-45 && nearestOpponent(this)<95 && Math.random()<.06;
+      kick=Math.abs(ball.x-this.x)<112 && Math.abs(ball.y-this.y)<105 && Math.random()<.22;
+      attack=this.y<arena.floor-45 && nearestOpponent(this)<120 && Math.random()<.11;
     }
 
     if(jump)this.jumpBuffer=20;
@@ -248,7 +248,7 @@ function drawCharacter(p){
   const skin="#f0bf8a";
   const pose=poseFor(p);
   ctx.save();
-  ctx.translate(p.x,p.y+pose.hipY);
+  ctx.translate(p.x,p.y+pose.hipY); if(p.hitFlash>0){ctx.shadowColor="#ffffff";ctx.shadowBlur=22;}
   if(p.facing<0)ctx.scale(-1,1);
 
   // ground shadow
@@ -376,44 +376,89 @@ function predictBall(){
   return {x:clamp(ball.x+ball.vx*t,arena.left+30,arena.right-30),y:arena.floor-40};
 }
 function kickBall(p){
-  const dx=ball.x-p.x,dy=ball.y-p.y,d=len(dx,dy);
-  if(d<78){
-    const air=!p.onGround;
-    const power=air?8.0:6.7;
-    const lift=air?-5.3:-7.4; // 低速で大きな弧を描く
-    ball.vx=p.facing*power + p.vx*.55;
-    ball.vy=lift + (air?p.vy*.18:0);
+  const air=!p.onGround;
+  const kickX=p.x+p.facing*(air?48:42);
+  const kickY=p.y+(air?-3:5);
+  const dx=ball.x-kickX,dy=ball.y-kickY,d=len(dx,dy);
+  const reach=air?122:105;
+
+  // 大きめの扇形判定。少し後ろにあるボールも拾える。
+  const forward=(ball.x-p.x)*p.facing;
+  if(d<reach && forward>-24){
+    const aimX=clamp(dx/Math.max(d,1),-.75,.75);
+    const aimY=clamp(dy/Math.max(d,1),-.85,.85);
+    const power=air?8.8:7.0;
+    ball.vx=p.facing*(power+Math.abs(aimX)*1.4)+p.vx*.65;
+    // ボールの位置で軌道が大きく変わる。上を蹴れば下へ、下を蹴れば上へ。
+    ball.vy=(air ? aimY*7.4-1.2 : -7.6+aimY*2.2)+p.vy*.24;
     ball.lastTouch=p.team;ball.wallHits=0;
+    hitBursts.push({x:ball.x,y:ball.y,life:10,color:"#eefcff"});
+  }
+
+  // キックそのものにも対人判定。
+  for(const q of players){
+    if(q===p || q.team===p.team)continue;
+    const qdx=q.x-kickX,qdy=q.y-kickY;
+    if(len(qdx,qdy)<(air?88:72) && (q.x-p.x)*p.facing>-30){
+      q.vx+=p.facing*(air?5.6:4.2);
+      q.vy=air?Math.min(q.vy,-2.2):Math.min(q.vy,-4.0);
+      q.stun=Math.max(q.stun,air?12:9);
+      q.hitFlash=7;
+      hitBursts.push({x:q.x,y:q.y,life:12,color:"#ffd75a"});
+      // 空中キック命中時に少し反動を得て、連続空中戦をしやすくする。
+      if(air){p.vy-=1.3;p.vx-=p.facing*.8;}
+    }
   }
 }
 function weaponAttack(p){
   if(p.kind==="ninja"){
-    projectiles.push({x:p.x+p.facing*25,y:p.y-12,vx:p.facing*12,life:70,team:p.team});
+    projectiles.push({x:p.x+p.facing*28,y:p.y-12,vx:p.facing*10.5,life:65,team:p.team});
   }else{
+    // 棍は広い縦判定で真下へ叩き落とす。
     for(const q of players){
       if(q.team===p.team)continue;
       const dx=q.x-p.x,dy=q.y-p.y;
-      if(Math.abs(dx)<88 && Math.abs(dy)<75){
-        q.vy=Math.max(q.vy,9.5);q.stun=14;q.vx+=p.facing*2;
+      if(Math.abs(dx)<105 && dy>-42 && dy<125){
+        q.vy=Math.max(q.vy,11.8);
+        q.vx+=p.facing*1.5;
+        q.stun=13;q.hitFlash=7;
+        hitBursts.push({x:q.x,y:q.y,life:14,color:"#ff8f48"});
+        p.vy-=.5;
       }
     }
   }
 }
 const projectiles=[];
+const hitBursts=[];
 function updateProjectiles(){
+  for(let i=hitBursts.length-1;i>=0;i--){hitBursts[i].life--;if(hitBursts[i].life<=0)hitBursts.splice(i,1);}
   for(let i=projectiles.length-1;i>=0;i--){
     const k=projectiles[i];k.x+=k.vx;k.life--;
     for(const p of players){
       if(p.team===k.team)continue;
-      if(len(p.x-k.x,p.y-k.y)<25){p.stun=18;p.vx+=Math.sign(k.vx)*2.5;projectiles.splice(i,1);break;}
+      if(len(p.x-k.x,p.y-k.y)<30){p.stun=12;p.hitFlash=7;p.vx+=Math.sign(k.vx)*2.2;hitBursts.push({x:p.x,y:p.y,life:10,color:"#8fe9ff"});projectiles.splice(i,1);break;}
     }
     if(i<projectiles.length && projectiles[i]===k && (k.life<=0||k.x<arena.left||k.x>arena.right))projectiles.splice(i,1);
   }
 }
 function separatePlayers(){
   for(let i=0;i<players.length;i++)for(let j=i+1;j<players.length;j++){
-    const a=players[i],b=players[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.max(.01,len(dx,dy)),min=46;
-    if(d<min){const push=(min-d)*.5,nx=dx/d,ny=dy/d;a.x-=nx*push;b.x+=nx*push;a.y-=ny*push*.35;b.y+=ny*push*.35;}
+    const a=players[i],b=players[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.max(.01,len(dx,dy)),min=50;
+    if(d<min){
+      const overlap=min-d,nx=dx/d,ny=dy/d;
+      a.x-=nx*overlap*.52;b.x+=nx*overlap*.52;
+      a.y-=ny*overlap*.42;b.y+=ny*overlap*.42;
+
+      // 空中では身体同士がぶつかって弾かれる。
+      if(!a.onGround || !b.onGround){
+        const rel=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+        if(rel<1.5){
+          const impulse=2.3-rel*.35;
+          a.vx-=nx*impulse;b.vx+=nx*impulse;
+          a.vy-=ny*impulse;b.vy+=ny*impulse;
+        }
+      }
+    }
   }
 }
 function score(team){
@@ -422,7 +467,7 @@ function score(team){
   statusEl.textContent=(team==="blue"?"BLUE":"RED")+" GOAL!";
   ball.reset();
   players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});
-  setTimeout(()=>statusEl.textContent="A: 武器　B: キック　C: ジャンプ",700);
+  setTimeout(()=>statusEl.textContent="空中ではA/Bを押し続けて連続攻撃できます",700);
 }
 
 function drawArena(){
@@ -465,6 +510,11 @@ function drawGoal(x,y,c,label){
 function drawProjectiles(){
   ctx.strokeStyle="#d7e2ea";ctx.lineWidth=3;
   projectiles.forEach(k=>{ctx.beginPath();ctx.moveTo(k.x-10*Math.sign(k.vx),k.y);ctx.lineTo(k.x+6*Math.sign(k.vx),k.y);ctx.stroke();});
+  hitBursts.forEach(h=>{
+    ctx.save();ctx.globalAlpha=h.life/14;ctx.strokeStyle=h.color;ctx.lineWidth=4;
+    const r=(15-h.life)*3+5;
+    ctx.beginPath();ctx.arc(h.x,h.y,r,0,Math.PI*2);ctx.stroke();ctx.restore();
+  });
 }
 
 function update(){
