@@ -14,6 +14,7 @@
   const effects = [];
   let shake = 0, hitStop = 0;
   const input = { x:0, y:0, a:false, b:false, c:false };
+  const GRAVITY = 850;
   let last = performance.now(), gameTime = 120, running = true;
   let blueScore = 0, redScore = 0;
 
@@ -30,43 +31,62 @@
 
   class Actor {
     constructor(x,y,team,isPlayer=false){
-      Object.assign(this,{x,y,team,isPlayer,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false});
+      Object.assign(this,{x,y,team,isPlayer,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0});
       this.speed = isPlayer ? 225 : 205;
       this.facing = team==='blue' ? -Math.PI/2 : Math.PI/2;
     }
     update(dt){
       this.stun=Math.max(0,this.stun-dt); this.coolA=Math.max(0,this.coolA-dt); this.coolB=Math.max(0,this.coolB-dt); this.guard=false;
       if(this.stun>0){ this.vx*=Math.pow(.03,dt); this.vy*=Math.pow(.03,dt); }
-      else if(this.isPlayer) this.playerControl(); else this.aiControl();
+      else if(this.isPlayer) this.playerControl(dt); else this.aiControl(dt);
       this.x+=this.vx*dt; this.y+=this.vy*dt; constrainActor(this);
     }
-    playerControl(){
+    playerControl(dt){
       const m=Math.min(1,len(input.x,input.y));
       if(m>.08){ const n=norm(input.x,input.y); this.vx=n.x*this.speed*m; this.vy=n.y*this.speed*m; this.facing=Math.atan2(n.y,n.x); }
       else { this.vx*=.82; this.vy*=.82; }
-      if(this.hasBall){ if(input.a)this.pass(); if(input.b)this.shoot(); if(input.c)this.guardBall(); }
-      else { if(input.a)this.slash(); if(input.b)this.bash(); if(input.c)this.guard=true; }
+
+      if(this.hasBall){
+        if(input.a){ this.holdA=true; this.chargeA=Math.min(1.2,this.chargeA+dt); }
+        else if(this.holdA){ this.pass(this.chargeA); this.holdA=false; this.chargeA=0; }
+
+        if(input.b){ this.holdB=true; this.chargeB=Math.min(1.25,this.chargeB+dt); }
+        else if(this.holdB){ this.shoot(this.chargeB); this.holdB=false; this.chargeB=0; }
+
+        if(input.c)this.guardBall();
+      } else {
+        this.holdA=this.holdB=false; this.chargeA=this.chargeB=0;
+        if(input.a)this.slash();
+        if(input.b){ if(canDirectKick(this)) this.directKick(); else this.bash(); }
+        if(input.c)this.guard=true;
+      }
     }
     aiControl(){
       const opponent=this.team==='blue'?enemy:player;
       let tx=ball.x, ty=ball.y;
-      if(this.hasBall){ ty=this.team==='blue'?-230:230; tx=0; if(Math.abs(this.y-ty)<150)this.shoot(); }
+      if(this.hasBall){ ty=this.team==='blue'?-230:230; tx=0; if(Math.abs(this.y-ty)<150)this.shoot(.72); }
       else if(opponent.hasBall){ tx=opponent.x; ty=opponent.y; if(dist(this,opponent)<96)this.slash(); }
       const n=norm(tx-this.x,ty-this.y); this.vx=n.x*this.speed; this.vy=n.y*this.speed; this.facing=Math.atan2(n.y,n.x);
     }
     slash(){ if(this.coolA>0||this.stun>0)return; this.coolA=.48; strike(this,91,.58,430,'SLASH'); pokeBall(this,185); }
     bash(){ if(this.coolB>0||this.stun>0)return; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.82,620,'BASH'); pokeBall(this,280); }
-    pass(){ if(!this.hasBall||this.coolA>0)return; this.coolA=.34; releaseBall(this,460,80); }
-    shoot(){
+    pass(charge=0){
+      if(!this.hasBall||this.coolA>0)return;
+      this.coolA=.34;
+      const lob=Math.min(1,charge/.65);
+      releaseBall(this,440+lob*70,55+lob*245);
+    }
+    shoot(charge=0){
       if(!this.hasBall||this.coolB>0)return;
-      this.coolB=.9;
-      const ty=this.team==='blue'?-GOAL.y:GOAL.y;
-      const desired=Math.atan2(ty-this.y,-this.x);
-      const delta=angleDiff(desired,this.facing);
-      // Only mild aim assist. Facing the ring still matters.
-      this.facing += Math.max(-.18,Math.min(.18,delta*.28));
-      if(!this.isPlayer) this.facing += (Math.random()-.5)*.20;
-      releaseBall(this,610,455);
+      this.coolB=.72;
+      releaseShot(this,Math.min(1,charge/.9),false);
+    }
+    directKick(){
+      if(this.coolB>0||ball.owner||dist(this,ball)>72||ball.z<18||ball.z>92)return;
+      this.coolB=.82;
+      releaseShot(this,.68,true);
+      effects.push({x:ball.x,y:ball.y,z:ball.z,t:.28,label:'DIRECT'});
+      shake=Math.max(shake,8);
     }
     guardBall(){ this.guard=true; this.vx*=.54; this.vy*=.54; }
   }
@@ -94,8 +114,36 @@
     const f=(ball.x-actor.x)*Math.cos(actor.facing)+(ball.y-actor.y)*Math.sin(actor.facing); if(f<0)return;
     ball.vx+=Math.cos(actor.facing)*speed; ball.vy+=Math.sin(actor.facing)*speed; ball.vz=Math.max(ball.vz,55);
   }
+  function canDirectKick(actor){ return !ball.owner && ball.z>=18 && ball.z<=92 && dist(actor,ball)<76; }
   function dropBall(actor,force=230){ actor.hasBall=false; ball.owner=null; ball.x=actor.x+Math.cos(actor.facing)*32; ball.y=actor.y+Math.sin(actor.facing)*32; ball.z=16; ball.vx=Math.cos(actor.facing)*force; ball.vy=Math.sin(actor.facing)*force; ball.vz=80; }
   function releaseBall(actor,speed,lift){ actor.hasBall=false; ball.owner=null; ball.x=actor.x+Math.cos(actor.facing)*35; ball.y=actor.y+Math.sin(actor.facing)*35; ball.z=18; ball.vx=Math.cos(actor.facing)*speed; ball.vy=Math.sin(actor.facing)*speed; ball.vz=lift; }
+
+  function releaseShot(actor,charge=0,direct=false){
+    const goalY=actor.team==='blue'?-GOAL.y:GOAL.y;
+    const desired=Math.atan2(goalY-actor.y,-actor.x);
+    const assist=direct?.78:(.56+charge*.38);
+    let shotAngle=actor.facing+angleDiff(desired,actor.facing)*assist;
+    if(!actor.isPlayer)shotAngle+=(Math.random()-.5)*(.12*(1-charge));
+    const speed=(direct?620:535)+charge*145;
+    let vy=Math.sin(shotAngle)*speed;
+    const requiredSign=goalY<actor.y?-1:1;
+    if(Math.sign(vy)!==requiredSign||Math.abs(vy)<145){
+      shotAngle=desired+angleDiff(shotAngle,desired)*.22;
+      vy=Math.sin(shotAngle)*speed;
+    }
+    const startZ=direct?Math.max(22,ball.z):18;
+    const startX=direct?ball.x:actor.x+Math.cos(shotAngle)*35;
+    const startY=direct?ball.y:actor.y+Math.sin(shotAngle)*35;
+    const travel=Math.max(.34,Math.abs((goalY-startY)/(vy||1)));
+    const exactVz=(GOAL.height-startZ+.5*GRAVITY*travel*travel)/travel;
+    // Taps already arc upward. A full charge removes vertical error entirely.
+    const error=(1-charge)*(direct?10:26)*(actor.isPlayer?1:(Math.random()-.5));
+    actor.hasBall=false; ball.owner=null;
+    ball.x=startX; ball.y=startY; ball.z=startZ;
+    ball.vx=Math.cos(shotAngle)*speed; ball.vy=vy;
+    ball.vz=Math.max(250,Math.min(660,exactVz+error));
+    actor.facing=shotAngle;
+  }
 
   function constrainActor(a){ const d=Math.hypot(a.x,a.y), max=FIELD.r-a.r; if(d>max){ a.x=a.x/d*max; a.y=a.y/d*max; a.vx*=.25; a.vy*=.25; } }
 
@@ -103,7 +151,7 @@
     if(ball.owner){ const a=ball.owner; ball.x=a.x+Math.cos(a.facing)*30; ball.y=a.y+Math.sin(a.facing)*30; ball.z=14; ball.vx=a.vx; ball.vy=a.vy; ball.vz=0; return; }
     ball.prevY=ball.y;
     ball.wallTouch=Math.max(0,ball.wallTouch-dt);
-    ball.x+=ball.vx*dt; ball.y+=ball.vy*dt; ball.z+=ball.vz*dt; ball.vz-=850*dt;
+    ball.x+=ball.vx*dt; ball.y+=ball.vy*dt; ball.z+=ball.vz*dt; ball.vz-=GRAVITY*dt;
     if(ball.z<=ball.r){
       ball.z=ball.r;
       if(ball.vz<0)ball.vz*=-.36;
@@ -150,7 +198,7 @@
   }
 
   function score(team){ if(!running)return; team==='blue'?blueScore++:redScore++; blueScoreEl.textContent=blueScore; redScoreEl.textContent=redScore; flash(team==='blue'?'RING GOAL!':'ENEMY GOAL'); resetPositions(); }
-  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0}); effects.length=0; shake=0; hitStop=0; }
+  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0}); effects.length=0; shake=0; hitStop=0; }
   function flash(text){ messageEl.textContent=text; messageEl.hidden=false; clearTimeout(flash.t); flash.t=setTimeout(()=>messageEl.hidden=true,850); }
 
   function update(dt){
@@ -192,8 +240,10 @@
     const rx=GOAL.radius*scale, ry=GOAL.radius*.92;
     ctx.save();
     ctx.strokeStyle=team==='blue'?'#69c6ff':'#ff7f7f'; ctx.lineCap='round';
-    ctx.globalAlpha=.25; ctx.lineWidth=20; ctx.beginPath(); ctx.ellipse(top.x,top.y,rx,ry,0,0,Math.PI*2); ctx.stroke();
-    ctx.globalAlpha=1; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(base.x,base.y);ctx.lineTo(top.x,top.y+ry);ctx.stroke();
+    const charging=player.hasBall&&player.holdB&&((team==='red'&&player.team==='blue')||(team==='blue'&&player.team==='red'));
+    ctx.globalAlpha=charging?.38:.25; ctx.lineWidth=charging?28:20; ctx.beginPath(); ctx.ellipse(top.x,top.y,rx,ry,0,0,Math.PI*2); ctx.stroke();
+    ctx.globalAlpha=1; ctx.lineWidth=8;
+    if(charging){ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=22+player.chargeB*18;} ctx.beginPath(); ctx.moveTo(base.x,base.y);ctx.lineTo(top.x,top.y+ry);ctx.stroke();
     ctx.lineWidth=10; ctx.beginPath(); ctx.ellipse(top.x,top.y,rx,ry,0,0,Math.PI*2);ctx.stroke();
     ctx.globalAlpha=.2;ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.ellipse(top.x,top.y,rx-7,ry-7,0,0,Math.PI*2);ctx.fill();
     ctx.restore();
@@ -209,6 +259,12 @@
     ctx.fillStyle='#d6a54d';ctx.fillRect(18,-27,8,47);ctx.strokeRect(18,-27,8,47);ctx.fillStyle='#aab9c0';ctx.beginPath();ctx.roundRect(-34,-28,17,36,6);ctx.fill();ctx.stroke();
     if(a.guard){ctx.strokeStyle='#fff';ctx.globalAlpha=.6;ctx.lineWidth=6;ctx.beginPath();ctx.arc(-9,-10,42,-1.1,1.1);ctx.stroke();}
     if(a.stun>0){ctx.fillStyle='#ffe368';ctx.beginPath();ctx.arc(-12,-68,5,0,7);ctx.arc(4,-74,5,0,7);ctx.arc(17,-65,5,0,7);ctx.fill();}
+    if(a.isPlayer&&a.hasBall&&(a.holdA||a.holdB)){
+      const q=Math.min(1,(a.holdB?a.chargeB/.9:a.chargeA/.65));
+      ctx.rotate(-(a.facing+Math.PI/2));
+      ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(-32,-88,64,8);
+      ctx.fillStyle=a.holdB?'#ffe36b':'#b9ecff';ctx.fillRect(-30,-86,60*q,4);
+    }
     ctx.restore();
   }
 
