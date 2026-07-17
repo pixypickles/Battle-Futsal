@@ -3,15 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Combat Airball Prototype 2.9</title>
+<title>Combat Airball Prototype 2.18</title>
 <style>
   :root{
     --bg:#0d1326; --panel:#151e37; --ink:#f3f6ff; --muted:#a9b6d2;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 15%,#263557 0,#0d1326 62%);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
-  #wrap{height:100%;display:grid;place-items:center;padding:12px}
-  #stage{position:relative;width:min(1280px,calc(100vw - 24px));aspect-ratio:16/9;border:2px solid #516184;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px #0008;background:#0b1020}
+  #wrap{height:100%;display:grid;place-items:center;padding:10px}
+  #stage{
+    position:relative;
+    width:min(1280px,calc(100vw - 20px));
+    height:min(720px,calc(100dvh - 20px));
+    aspect-ratio:16/9;
+    border:2px solid #516184;border-radius:18px;overflow:hidden;
+    box-shadow:0 24px 80px #0008;background:#0b1020;
+  }
   canvas{width:100%;height:100%;display:block}
   #hud{position:absolute;inset:0;pointer-events:none;z-index:5}
   #top{display:flex;justify-content:center;align-items:center;gap:18px;padding:14px;font-weight:900;text-shadow:0 2px 5px #000}
@@ -65,6 +72,93 @@
     #badge{display:none}
   }
 
+
+  @media (max-aspect-ratio: 1.35){
+    #wrap{padding:0}
+    #stage{
+      width:100vw;
+      height:100dvh;
+      max-width:none;
+      max-height:none;
+      aspect-ratio:auto;
+      border-radius:0;
+      border-left:0;
+      border-right:0;
+    }
+    canvas{
+      width:100%;
+      height:100%;
+      object-fit:fill;
+    }
+    #top{
+      padding-top:14px;
+      gap:14px;
+      transform:scale(1.08);
+      transform-origin:top center;
+    }
+    #touchControls{display:block}
+    #moveControls{
+      left:max(10px,env(safe-area-inset-left));
+      bottom:max(12px,env(safe-area-inset-bottom));
+      flex-direction:row;
+      gap:8px;
+    }
+    #actionControls{
+      right:max(10px,env(safe-area-inset-right));
+      bottom:max(12px,env(safe-area-inset-bottom));
+      display:grid;
+      grid-template-columns:repeat(2,68px);
+      grid-template-rows:repeat(2,68px);
+      gap:8px;
+    }
+    #actionControls .jump{grid-column:1;grid-row:1}
+    #actionControls .staff{grid-column:2;grid-row:1}
+    #actionControls .kick{grid-column:1;grid-row:2}
+    #actionControls .smash{grid-column:2;grid-row:2}
+    .touchBtn,.touchBtn.action{
+      width:68px;height:68px;
+      font-size:23px;
+    }
+    .touchLabel{font-size:10px}
+    .touchLabel b{font-size:22px}
+    #badge{display:none}
+  }
+  @media (max-aspect-ratio: 1.35) and (min-height:900px){
+    #actionControls{
+      grid-template-columns:repeat(2,84px);
+      grid-template-rows:repeat(2,84px);
+    }
+    .touchBtn,.touchBtn.action{width:84px;height:84px}
+  }
+
+
+  @media (max-aspect-ratio:1.35){
+    #start{padding:72px 18px 170px;overflow:auto;align-items:center}
+    #card{
+      width:min(620px,96%);
+      max-height:calc(100dvh - 210px);
+      overflow:auto;
+      padding:clamp(18px,4vw,28px);
+    }
+    h1{font-size:clamp(30px,7vw,54px)}
+    .lead{font-size:clamp(14px,3vw,20px);margin-bottom:16px}
+    #card .small{font-size:clamp(10px,2.2vw,14px)}
+    #play{padding:12px 24px;font-size:clamp(17px,3.4vw,22px)}
+  }
+  @media (max-aspect-ratio:1.35) and (max-height:760px){
+    #start{padding-top:50px;padding-bottom:145px}
+    #card{max-height:calc(100dvh - 170px);padding:16px}
+    .lead{line-height:1.4}
+  }
+
+
+  @media (max-aspect-ratio:1.35){
+    #moveControls .touchBtn{
+      width:66px;
+      height:66px;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -72,15 +166,16 @@
   <div id="stage">
     <canvas id="game" width="1280" height="720"></canvas>
     <div id="hud">
+      <div id="runtimeError" style="display:none;position:absolute;z-index:100;left:12px;right:12px;top:12px;padding:12px;border-radius:12px;background:#7d1222;color:white;font-weight:800;pointer-events:auto"></div>
       <div id="top"><div class="score blue" id="sBlue">0</div><div id="timer">90</div><div class="score red" id="sRed">0</div></div>
       <div id="notice"></div>
       <div id="help">
         <b>青チーム（操作）</b><br>
-        移動：A / D　ジャンプ：W<br>
-        横突き：F　キック：G　振り下ろし：H<br>
-        <span style="color:#9fb0cf">F＝横 / G＝上 / H＝前方・斜め下</span>
+        移動：A / D　ジャンプ：W（縦画面では大ジャンプ）<br>
+        横突き：F　キック：G　風車／叩きつけ：H<br>
+        <span style="color:#9fb0cf">F＝横 / G＝上 / H＝地上長押し風車 / 空中は1回転</span>
       </div>
-      <div id="badge">Combat Airball Prototype 2.9</div>
+      <div id="badge">Combat Airball Prototype 2.18</div>
 
       <div id="touchControls" aria-label="タッチ操作">
         <div class="touchGroup" id="moveControls">
@@ -98,7 +193,7 @@
       <div id="start">
         <div id="card">
           <h1>COMBAT AIRBALL</h1>
-          <p class="lead">ボールを蹴り上げ、全員で空へ。長棍の横突きで相手ごと吹き飛ばし、左右のゴールへ叩き込め。</p>
+          <p class="lead">ボールを蹴り上げ、全員で空へ。横突きで狙い、H長押しの風車で守りながら押し返せ。</p>
           <button id="play">試合開始</button>
           <div class="small">青1体を操作。残り3体はAIです。ボタン・Enter・Space・画面タップで開始できます。</div>
         </div>
@@ -109,10 +204,39 @@
 <script>
 (() => {
 'use strict';
+
+window.addEventListener('error',e=>{
+  const box=document.getElementById('runtimeError');
+  if(box){
+    box.style.display='block';
+    box.textContent='エラー: '+(e.message||'不明なエラー');
+  }
+});
+window.addEventListener('unhandledrejection',e=>{
+  const box=document.getElementById('runtimeError');
+  if(box){
+    box.style.display='block';
+    box.textContent='エラー: '+String(e.reason||'処理に失敗しました');
+  }
+});
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const W=1280,H=720, FLOOR=630, LEFT=62, RIGHT=1218;
-const GOAL_TOP=355, GOAL_BOTTOM=525, GOAL_DEPTH=46;
+let W=1280,H=720,FLOOR=630,LEFT=62,RIGHT=1218;
+let GOAL_TOP=355, GOAL_BOTTOM=525, GOAL_DEPTH=46;
+let portraitMode=false;
+function configureViewport(){
+  portraitMode=(innerHeight/innerWidth)>0.74;
+  if(portraitMode){
+    canvas.width=900; canvas.height=1200;
+    W=900; H=1200; FLOOR=1015; LEFT=42; RIGHT=858; GOAL_TOP=540; GOAL_BOTTOM=805; GOAL_DEPTH=46;
+  }else{
+    canvas.width=1280; canvas.height=720;
+    W=1280; H=720; FLOOR=630; LEFT=62; RIGHT=1218; GOAL_TOP=355; GOAL_BOTTOM=525; GOAL_DEPTH=46;
+  }
+}
+configureViewport();
+addEventListener('resize',()=>{configureViewport(); if(typeof fighters!=='undefined') resetPositions();});
 const BLUE=0, RED=1;
 const keys = new Set();
 let last=0, running=false, gameTime=90, scores=[0,0], freeze=0, shake=0, resetTimer=0;
@@ -135,19 +259,20 @@ class Fighter{
   constructor(x,team,ai=false){
     this.x=x; this.y=FLOOR-43; this.vx=0; this.vy=0; this.team=team; this.ai=ai;
     this.facing=team===BLUE?1:-1; this.onGround=true; this.coyote=0;
-    this.attack=0; this.attackKind=''; this.kick=0; this.smash=0; this.stun=0; this.wallStun=0;
-    this.jumpBuffer=0; this.attackCd=0; this.kickCd=0; this.smashCd=0; this.flash=0; this.id=Math.random();
+    this.attack=0; this.attackKind=''; this.kick=0; this.smash=0; this.spin=0; this.airSmashHit=false; this.stun=0; this.wallStun=0;
+    this.jumpBuffer=0; this.attackCd=0; this.kickCd=0; this.smashCd=0; this.spinHitCd=0; this.flash=0; this.id=Math.random();
     this.targetX=x; this.airJumps=1;
   }
   control(dt){
     if(this.stun>0){this.stun-=dt; return}
-    let move=0, jump=false, attack=false, kick=false, smash=false;
+    let move=0, jump=false, attack=false, kick=false, smash=false, spinHeld=false;
     if(!this.ai){
       move=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
       jump=pressed('KeyW');
       attack=pressed('KeyF');
       kick=pressed('KeyG');
       smash=pressed('KeyH');
+      spinHeld=keys.has('KeyH') && this.onGround;
     } else {
       const b=ball;
       const attackRange=Math.abs(b.x-this.x)<135 && Math.abs(b.y-this.y)<90;
@@ -158,7 +283,7 @@ class Fighter{
       if(enemy && Math.abs(enemy.x-this.x)<120 && Math.abs(enemy.y-this.y)<95 && Math.random()<0.035) attack=true;
       if(attackRange){
         const towardOwnGoal=(this.team===BLUE&&b.vx<0)||(this.team===RED&&b.vx>0);
-        if(towardOwnGoal && Math.random()<0.16) smash=true;
+        if(towardOwnGoal && Math.random()<0.20){ smash=true; spinHeld=this.onGround&&Math.random()<0.65; }
         else if(!this.onGround && b.y>this.y-20 && Math.random()<0.10) smash=true;
         else if(!this.onGround && Math.abs(b.x-this.x)<120) attack=Math.random()<0.11;
         else if(Math.random()<0.075) kick=true;
@@ -172,14 +297,15 @@ class Fighter{
       this.vx+=move*accel*dt; this.facing=move;
     }
     const max=this.onGround?320:360;
+    if(this.spin>0) this.vx*=0.88;
     this.vx=clamp(this.vx,-max,max);
     if(jump) this.jumpBuffer=.13;
     if(this.jumpBuffer>0){
       this.jumpBuffer-=dt;
       if(this.onGround||this.coyote>0){
-        this.vy=-690; this.onGround=false; this.coyote=0; this.jumpBuffer=0; burst(this.x,this.y+38,'#dff7ff',8);
+        this.vy=portraitMode?-920:-690; this.onGround=false; this.coyote=0; this.jumpBuffer=0; burst(this.x,this.y+38,'#dff7ff',8);
       }else if(this.airJumps>0){
-        this.vy=-610; this.airJumps--; this.jumpBuffer=0; burst(this.x,this.y+26,'#cfe9ff',10);
+        this.vy=portraitMode?-820:-610; this.airJumps--; this.jumpBuffer=0; burst(this.x,this.y+26,'#cfe9ff',10);
       }
     }
     if(attack && this.attackCd<=0){
@@ -187,16 +313,25 @@ class Fighter{
       this.vx+=this.facing*(this.onGround?45:95);
     }
     if(kick && this.kickCd<=0){this.kick=.31; this.kickCd=.38}
-    if(smash && this.smashCd<=0){this.smash=.48; this.smashCd=.58; this.attackKind=this.onGround?'groundSmash':'airSmash'}
+    if(smash && this.smashCd<=0){
+      this.smash=this.onGround?.42:.50;
+      this.smashCd=this.onGround?.18:.62;
+      this.attackKind=this.onGround?'groundSmash':'airSmash';
+      this.spin=this.onGround?.01:0;
+      this.airSmashHit=false;
+    }
+    if(spinHeld && this.spin>0 && this.stun<=0){this.spin=Math.min(8,this.spin+dt)}
+    else if((!spinHeld || !this.onGround) && this.smash<=0){this.spin=0}
   }
   update(dt){
     this.control(dt);
-    this.attackCd=Math.max(0,this.attackCd-dt); this.kickCd=Math.max(0,this.kickCd-dt); this.smashCd=Math.max(0,this.smashCd-dt);
+    this.attackCd=Math.max(0,this.attackCd-dt); this.kickCd=Math.max(0,this.kickCd-dt); this.smashCd=Math.max(0,this.smashCd-dt); this.spinHitCd=Math.max(0,this.spinHitCd-dt);
     this.flash=Math.max(0,this.flash-dt); this.wallStun=Math.max(0,this.wallStun-dt);
     if(this.attack>0) this.attack-=dt;
     if(this.kick>0) this.kick-=dt;
     if(this.smash>0) this.smash-=dt;
-    if(!this.onGround){this.vy+=1350*dt; this.coyote=Math.max(0,this.coyote-dt)}
+    if(this.spin>0 && this.smash<=0) this.attackKind=this.onGround?'groundSpin':'airSpin';
+    if(!this.onGround){this.vy+=(portraitMode?1080:1350)*dt; this.coyote=Math.max(0,this.coyote-dt)}
     this.x+=this.vx*dt; this.y+=this.vy*dt;
     this.vx*=Math.pow(this.onGround?.80:.965,dt*60);
     if(this.y>=FLOOR-43){
@@ -225,17 +360,19 @@ class Fighter{
         for(const o of fighters){
           if(o===this || o.team===this.team || o.flash>.06) continue;
           if(circleHit(hx,hy,70,o.x,o.y,31)){
-            o.vx=this.facing*(this.attackKind==='air'?720:610);
-            o.vy=this.attackKind==='air'?-80:-125;
+            o.vx=this.facing*(this.attackKind==='air'?1120:1080);
+            o.vy=this.attackKind==='air'?0:-20;
             o.stun=.22; o.flash=.14; freeze=.045; shake=14;
             burst(o.x,o.y,'#fff6b0',18); slashTrail(this.x,this.y,this.facing,'#fff2a6');
           }
         }
         if(ball.hitCd<=0 && circleHit(hx,hy,78,ball.x,ball.y,ball.r)){
           if(this.attackKind==='air'){
-            ball.vx=this.facing*920; ball.vy=clamp(ball.vy*.15-20,-180,180);
+            ball.vx=this.facing*980;
+            ball.vy=clamp(ball.vy*.12,-120,120);
           }else{
-            ball.vx=this.facing*230; ball.vy=-820;
+            ball.vx=this.facing*620;
+            ball.vy=clamp(ball.vy*.25,-120,120);
           }
           ball.lastTeam=this.team; ball.hitCd=.12; freeze=.055; shake=17;
           burst(ball.x,ball.y,'#ffffff',22); slashTrail(this.x,this.y,this.facing,'#ffffff');
@@ -254,84 +391,164 @@ class Fighter{
         }
       }
     }
-    if(this.smash>0){
-      const elapsed=.48-this.smash;
-      if(elapsed>.16&&elapsed<.34){
-        const airborne=this.attackKind==='airSmash';
-        const hx=this.x+this.facing*(airborne?70:82);
-        const hy=this.y+(airborne?38:12);
+    if(this.smash>0 || this.spin>0){
+      const airborne=this.attackKind==='airSmash' && !this.onGround;
+      const elapsed=this.smash>0 ? (airborne?.50:.42)-this.smash : 1;
+      const active=airborne ? (elapsed>.17&&elapsed<.36) : (this.spin>0 || (elapsed>.14&&elapsed<.34));
+
+      if(active && this.spinHitCd<=0 && !(airborne&&this.airSmashHit)){
+        const hx=this.x+this.facing*(airborne?74:106);
+        const hy=this.y+(airborne?72:18);
+
         for(const o of fighters){
           if(o===this || o.team===this.team || o.flash>.06) continue;
-          if(circleHit(hx,hy,78,o.x,o.y,31)){
-            o.vx=this.facing*(airborne?420:520);
-            o.vy=airborne?720:260;
-            o.stun=.28; o.flash=.14; freeze=.05; shake=16;
-            burst(o.x,o.y,'#ffd4bd',20); smashTrail(this.x,this.y,this.facing,'#ffb48e');
+          if(circleHit(hx,hy,airborne?82:90,o.x,o.y,31)){
+            o.vx=this.facing*(airborne?120:540);
+            o.vy=airborne?1080:180;
+            o.stun=airborne?.32:.22; o.flash=.12; freeze=.035; shake=14;
+            burst(o.x,o.y,'#ffd4bd',16);
+            smashTrail(this.x,this.y,this.facing,'#ffb48e');
+            this.spinHitCd=airborne?.45:.16;
+            if(airborne) this.airSmashHit=true;
           }
         }
-        if(ball.hitCd<=0 && circleHit(hx,hy,88,ball.x,ball.y,ball.r)){
-          ball.vx=this.facing*(airborne?760:860);
-          ball.vy=airborne?520:-260;
-          ball.lastTeam=this.team; ball.hitCd=.14; freeze=.06; shake=19;
-          burst(ball.x,ball.y,'#fff0d8',25); smashTrail(this.x,this.y,this.facing,'#fff0c2');
+
+        if(ball.hitCd<=0 && circleHit(hx,hy,airborne?88:100,ball.x,ball.y,ball.r)){
+          ball.vx=this.facing*(airborne?470:900);
+          ball.vy=airborne?760:-180;
+          ball.lastTeam=this.team; ball.hitCd=.11; freeze=.035; shake=15;
+          burst(ball.x,ball.y,'#fff0d8',18);
+          smashTrail(this.x,this.y,this.facing,'#fff0c2');
+          this.spinHitCd=airborne?.45:.13;
+          if(airborne) this.airSmashHit=true;
         }
       }
     }
   }
   draw(){
-    const t=performance.now()/1000;
-    const teamC=this.team===BLUE?'#43b9ff':'#ff576d';
-    const dark=this.team===BLUE?'#1269a5':'#a61f36';
+    const phase=performance.now()/120;
+    const teamC=this.team===BLUE?'#2db9ff':'#ff5277';
+    const dark=this.team===BLUE?'#113c58':'#5c1830';
+    const skin='#f0bf8a';
+    const outline='#dff7ff';
     const attackP=this.attack>0?1-this.attack/.42:0;
     const kickP=this.kick>0?1-this.kick/.31:0;
     const smashP=this.smash>0?1-this.smash/.48:0;
-    ctx.save(); ctx.translate(this.x,this.y);
-    if(this.flash>0){ctx.shadowBlur=28;ctx.shadowColor='#fff'}
-    // shadow
-    ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,42,29,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-    // simple illustrated monk silhouette
-    ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(-22,38);ctx.quadraticCurveTo(-27,12,-16,-8);ctx.quadraticCurveTo(0,-17,16,-8);ctx.quadraticCurveTo(27,12,22,38);ctx.closePath();ctx.fill();
-    ctx.fillStyle=teamC;ctx.beginPath();ctx.moveTo(-18,34);ctx.quadraticCurveTo(-21,10,-13,-5);ctx.quadraticCurveTo(0,-12,13,-5);ctx.quadraticCurveTo(21,10,18,34);ctx.closePath();ctx.fill();
-    ctx.strokeStyle='#f5e6bd';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-14,7);ctx.lineTo(14,7);ctx.stroke();
-    ctx.fillStyle='#f7ddb2';ctx.beginPath();ctx.arc(0,-30,18,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle=teamC;ctx.beginPath();ctx.arc(0,-35,18,Math.PI,Math.PI*2);ctx.lineTo(18,-31);ctx.lineTo(-18,-31);ctx.closePath();ctx.fill();
-    ctx.fillStyle='#243047';ctx.beginPath();ctx.arc(this.facing*5,-31,2.4,0,Math.PI*2);ctx.fill();
-    // legs
-    ctx.strokeStyle='#d7e1f1';ctx.lineWidth=8;ctx.lineCap='round';
-    let legLift=kickP>0?Math.sin(Math.min(1,kickP)*Math.PI)*20:0;
-    ctx.beginPath();ctx.moveTo(-9,31);ctx.lineTo(-13,44);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(9,31);ctx.lineTo(12+this.facing*legLift,44-legLift*.45);ctx.stroke();
+    const air=!this.onGround;
 
-    // staff pose, always two-handed
-    let ang=-.08*this.facing, sx=-40*this.facing, sy=-10;
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    if(this.facing<0) ctx.scale(-1,1);
+    if(this.flash>0){ctx.shadowBlur=25;ctx.shadowColor='#fff'}
+
+    // Ground shadow
+    ctx.save();
+    ctx.globalAlpha=.22;ctx.fillStyle='#000';
+    ctx.beginPath();ctx.ellipse(0,42,29,8,0,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+
+    // Body lean
+    let bodyRot=0;
+    if(this.stun>0) bodyRot=.48;
+    else if(this.smash>0) bodyRot=lerp(-.08,.30,Math.min(1,smashP*1.15));
+    else if(this.attack>0) bodyRot=-.13*Math.sin(Math.min(1,attackP)*Math.PI);
+    else if(air) bodyRot=this.vy<0?-.07:.08;
+    ctx.rotate(bodyRot);
+
+    // Trailing bandana/scarf — visual from the post-ninja monk prototype.
+    ctx.strokeStyle=teamC;ctx.lineWidth=7;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-8,-31);
+    ctx.quadraticCurveTo(-34-this.vx*.025,-38,-47-this.vx*.035,-19-this.vy*.018);
+    ctx.stroke();
+
+    // Legs
+    const run=Math.sin(phase*1.7);
+    ctx.strokeStyle='#eef3f8';ctx.lineWidth=10;ctx.lineCap='round';
+    if(this.kick>0){
+      const k=Math.sin(Math.min(1,kickP)*Math.PI);
+      ctx.beginPath();ctx.moveTo(-7,10);ctx.lineTo(-13,39);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(7,10);ctx.lineTo(20+38*k,36-25*k);ctx.stroke();
+    }else if(air){
+      ctx.beginPath();ctx.moveTo(-7,10);ctx.lineTo(-19,37);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(7,10);ctx.lineTo(17,35);ctx.stroke();
+    }else{
+      ctx.beginPath();ctx.moveTo(-7,10);ctx.lineTo(-11+run*4,40);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(7,10);ctx.lineTo(11-run*4,40);ctx.stroke();
+    }
+
+    // Robe
+    ctx.fillStyle=teamC;ctx.strokeStyle=outline;ctx.lineWidth=3;
+    ctx.beginPath();ctx.roundRect(-17,-27,34,41,8);ctx.fill();ctx.stroke();
+    ctx.fillStyle=dark;ctx.fillRect(-18,5,36,7);
+    ctx.fillStyle='#f6cf55';ctx.beginPath();ctx.arc(0,8.5,4,0,Math.PI*2);ctx.fill();
+
+    // Head
+    ctx.fillStyle=skin;ctx.strokeStyle=outline;ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,-42,16,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+    // Dark hair/hood plus a clear bandana strip.
+    ctx.fillStyle='#11232f';
+    ctx.beginPath();ctx.arc(0,-46,16,Math.PI,Math.PI*2);ctx.lineTo(15,-39);
+    ctx.quadraticCurveTo(4,-31,-15,-38);ctx.closePath();ctx.fill();
+    ctx.fillStyle=teamC;ctx.fillRect(-14,-47,28,6);
+    ctx.fillStyle='#eafaff';ctx.fillRect(-9,-43,18,3);
+    ctx.fillStyle='#17212a';ctx.beginPath();ctx.arc(5,-41,2,0,Math.PI*2);ctx.fill();
+
+    // Staff pose. Local positive X is always the character's forward direction.
+    let cx=0, cy=-12, angle=-.12;
+    let staffLen=214;
+
     if(this.attack>0){
       if(this.attackKind==='air'){
         const p=easeOutBack(Math.min(1,attackP*1.35));
-        sx=(-55+125*p)*this.facing; ang=lerp(-.08,0,p)*this.facing;
+        cx=lerp(-26,62,p); cy=-12; angle=lerp(-.10,0,p);
       }else{
-        if(attackP<.48){const p=easeOutBack(attackP/.48);sx=lerp(-52,78,p)*this.facing;ang=-.04*this.facing}
-        else{const p=(attackP-.48)/.52;sx=78*this.facing;sy=lerp(-8,-32,p);ang=lerp(-.04,-.72,p)*this.facing}
+        const p=easeOutBack(Math.min(1,attackP*1.35));
+        cx=lerp(-24,72,p);
+        cy=-11;
+        angle=lerp(-.06,0,p);
       }
     }
-    if(this.smash>0){
-      if(smashP<.42){
-        const p=smashP/.42;
-        sx=lerp(-24,0,p)*this.facing; sy=lerp(-12,-66,p); ang=lerp(-.15,-1.38,p)*this.facing;
+
+    if(this.smash>0 || this.spin>0){
+      let theta=0;
+      if(this.attackKind==='airSmash' && this.smash>0){
+        const p=Math.min(1,1-this.smash/.50);
+        theta=p*Math.PI*2;
       }else{
-        const p=easeOutBack((smashP-.42)/.58);
-        sx=lerp(0,78,p)*this.facing; sy=lerp(-66,10,p);
-        ang=lerp(-1.38,.72,p)*this.facing;
+        const initial=this.smash>0?Math.min(1,1-this.smash/.42):1;
+        const revolutions=this.spin>0?this.spin*7.8:0;
+        theta=initial*Math.PI*1.95+revolutions;
       }
+      cx=18;
+      cy=-13;
+      angle=-.12+theta;
     }
-    ctx.save();ctx.translate(sx,sy);ctx.rotate(ang);
-    ctx.strokeStyle='#68411f';ctx.lineWidth=8;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(-100*this.facing,0);ctx.lineTo(100*this.facing,0);ctx.stroke();
-    ctx.strokeStyle='#f6cf63';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-100*this.facing,0);ctx.lineTo(100*this.facing,0);ctx.stroke();
-    ctx.restore();
-    // arms toward staff
-    ctx.strokeStyle='#f7ddb2';ctx.lineWidth=8;
-    ctx.beginPath();ctx.moveTo(-10,-3);ctx.lineTo(sx*.38,sy*.45);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(10,-4);ctx.lineTo(sx*.62,sy*.68);ctx.stroke();
+
+    // Staff endpoints
+    const hx=Math.cos(angle), hy=Math.sin(angle);
+    const rearX=cx-hx*staffLen*.5, rearY=cy-hy*staffLen*.5;
+    const frontX=cx+hx*staffLen*.5, frontY=cy+hy*staffLen*.5;
+
+    // Both hands stay on the shaft and swap leading/trailing roles naturally.
+    const hand1={x:cx-hx*18,y:cy-hy*18};
+    const hand2={x:cx+hx*18,y:cy+hy*18};
+
+    // Arms behind staff
+    ctx.strokeStyle=skin;ctx.lineWidth=9;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-11,-17);ctx.lineTo(hand1.x,hand1.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(11,-17);ctx.lineTo(hand2.x,hand2.y);ctx.stroke();
+
+    // Long staff
+    ctx.strokeStyle='#68411f';ctx.lineWidth=9;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(rearX,rearY);ctx.lineTo(frontX,frontY);ctx.stroke();
+    ctx.strokeStyle='#f6cf63';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(rearX,rearY);ctx.lineTo(frontX,frontY);ctx.stroke();
+
+    if(this.stun>0){
+      ctx.strokeStyle='#ffd94a';ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(0,-69,13,0,Math.PI*1.5);ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -355,9 +572,37 @@ class Ball{
     this.vx*=Math.pow(.996,dt*60);
     if(this.y>FLOOR-this.r){this.y=FLOOR-this.r;this.vy=-Math.abs(this.vy)*.66;if(Math.abs(this.vy)<80)this.vy=-80;this.vx*=.93}
     if(this.y<this.r+38){this.y=this.r+38;this.vy=Math.abs(this.vy)*.72}
-    const inGoalY=this.y>GOAL_TOP&&this.y<GOAL_BOTTOM;
-    if(this.x<LEFT+GOAL_DEPTH && inGoalY){score(RED);return}
-    if(this.x>RIGHT-GOAL_DEPTH && inGoalY){score(BLUE);return}
+    // Goal mouth has mouse-guard lips at both upper and lower corners.
+    // A ball must pass through the central opening; grazing either lip bounces it back.
+    const guardLen=portraitMode?78:58;
+    const mouthTop=GOAL_TOP+guardLen;
+    const mouthBottom=GOAL_BOTTOM-guardLen;
+    const leftGoalPlane=LEFT+GOAL_DEPTH;
+    const rightGoalPlane=RIGHT-GOAL_DEPTH;
+
+    const hitUpperLip=this.y-this.r<GOAL_TOP+guardLen && this.y+this.r>GOAL_TOP-8;
+    const hitLowerLip=this.y+this.r>GOAL_BOTTOM-guardLen && this.y-this.r<GOAL_BOTTOM+8;
+
+    // Left goal lips
+    if(this.x-this.r<leftGoalPlane && this.x>LEFT-4 && (hitUpperLip||hitLowerLip)){
+      this.x=leftGoalPlane+this.r;
+      this.vx=Math.abs(this.vx)*.82;
+      this.vy+=(hitUpperLip?180:-180);
+      burst(this.x,this.y,'#79dbff',8);
+    }
+
+    // Right goal lips
+    if(this.x+this.r>rightGoalPlane && this.x<RIGHT+4 && (hitUpperLip||hitLowerLip)){
+      this.x=rightGoalPlane-this.r;
+      this.vx=-Math.abs(this.vx)*.82;
+      this.vy+=(hitUpperLip?180:-180);
+      burst(this.x,this.y,'#ff8795',8);
+    }
+
+    const inGoalMouth=this.y>mouthTop&&this.y<mouthBottom;
+    if(this.x<leftGoalPlane && inGoalMouth){score(RED);return}
+    if(this.x>rightGoalPlane && inGoalMouth){score(BLUE);return}
+
     if(this.x<LEFT+this.r){this.x=LEFT+this.r;this.vx=Math.abs(this.vx)*.75}
     if(this.x>RIGHT-this.r){this.x=RIGHT-this.r;this.vx=-Math.abs(this.vx)*.75}
   }
@@ -386,7 +631,10 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys.delete(e.code));
 function pressed(code){if(pressQueue.has(code)){pressQueue.delete(code);return true}return false}
-document.getElementById('play').onclick=startGame;
+const playButton=document.getElementById('play');
+playButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();startGame();});
+playButton.addEventListener('pointerup',e=>{e.preventDefault();e.stopPropagation();startGame();});
+playButton.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();startGame();},{passive:false});
 
 // Touch / pointer controls
 document.querySelectorAll('.touchBtn').forEach(btn=>{
@@ -415,16 +663,17 @@ ui.start.addEventListener('pointerdown',e=>{
 
 
 function startGame(){
+  if(running) return;
   document.querySelector('#card h1').textContent='COMBAT AIRBALL';
-  document.querySelector('#card .lead').textContent='ボールを蹴り上げ、全員で空へ。長棍の横突きで相手ごと吹き飛ばし、左右のゴールへ叩き込め。';
+  document.querySelector('#card .lead').textContent='ボールを蹴り上げ、全員で空へ。横突きで狙い、H長押しの風車で守りながら押し返せ。';
   document.getElementById('play').textContent='試合開始';
   running=true; gameTime=90;scores=[0,0];
   ui.blue.textContent='0'; ui.red.textContent='0';
   ui.start.style.display='none';resetPositions();showNotice('AIRBALL!', '#fff4a6');
 }
 function resetPositions(){
-  const xs=[300,455,825,980];
-  fighters.forEach((f,i)=>{f.x=xs[i];f.y=FLOOR-43;f.vx=f.vy=0;f.stun=0;f.attack=0;f.kick=0;f.smash=0;f.onGround=true;f.airJumps=1});
+  const xs=portraitMode?[205,345,555,695]:[300,455,825,980];
+  fighters.forEach((f,i)=>{f.x=xs[i];f.y=FLOOR-43;f.vx=f.vy=0;f.stun=0;f.attack=0;f.kick=0;f.smash=0;f.spin=0;f.airSmashHit=false;f.onGround=true;f.airJumps=1});
   ball.reset(); resetTimer=.65;
 }
 function score(team){
@@ -475,11 +724,37 @@ function drawArena(){
   ctx.setLineDash([9,12]);ctx.strokeStyle='#ffffff2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2,70);ctx.lineTo(W/2,FLOOR);ctx.stroke();ctx.setLineDash([]);
 }
 function drawGoal(x,dir,c){
-  ctx.save();ctx.strokeStyle=c;ctx.lineWidth=7;ctx.shadowBlur=18;ctx.shadowColor=c;
-  ctx.beginPath();ctx.moveTo(x,GOAL_TOP);ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_TOP);ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_BOTTOM);ctx.lineTo(x,GOAL_BOTTOM);ctx.stroke();
-  // mouse-guard lip
-  ctx.lineWidth=11;ctx.beginPath();ctx.moveTo(x+dir*4,GOAL_BOTTOM);ctx.lineTo(x+dir*34,GOAL_BOTTOM-19);ctx.stroke();
-  ctx.globalAlpha=.26;ctx.fillStyle=c;ctx.fillRect(dir>0?x:x-GOAL_DEPTH,GOAL_TOP,GOAL_DEPTH,GOAL_BOTTOM-GOAL_TOP);ctx.restore();
+  const guardLen=portraitMode?78:58;
+  const lipDepth=portraitMode?54:38;
+  ctx.save();
+  ctx.strokeStyle=c;ctx.lineWidth=7;ctx.shadowBlur=18;ctx.shadowColor=c;
+
+  // Goal frame
+  ctx.beginPath();
+  ctx.moveTo(x,GOAL_TOP);
+  ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_TOP);
+  ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_BOTTOM);
+  ctx.lineTo(x,GOAL_BOTTOM);
+  ctx.stroke();
+
+  // Upper mouse guard: projects inward and downward.
+  ctx.lineWidth=11;
+  ctx.beginPath();
+  ctx.moveTo(x+dir*GOAL_DEPTH,GOAL_TOP+4);
+  ctx.lineTo(x+dir*(GOAL_DEPTH+lipDepth),GOAL_TOP+guardLen);
+  ctx.stroke();
+
+  // Lower mouse guard: projects inward and upward.
+  ctx.beginPath();
+  ctx.moveTo(x+dir*GOAL_DEPTH,GOAL_BOTTOM-4);
+  ctx.lineTo(x+dir*(GOAL_DEPTH+lipDepth),GOAL_BOTTOM-guardLen);
+  ctx.stroke();
+
+  // Goal interior
+  ctx.globalAlpha=.23;
+  ctx.fillStyle=c;
+  ctx.fillRect(dir>0?x:x-GOAL_DEPTH,GOAL_TOP,GOAL_DEPTH,GOAL_BOTTOM-GOAL_TOP);
+  ctx.restore();
 }
 function draw(){
   ctx.save();
@@ -490,8 +765,7 @@ function draw(){
     const a=t.life/t.max;ctx.save();ctx.globalAlpha=a*.78;ctx.strokeStyle=t.c;ctx.lineWidth=26*a+4;ctx.lineCap='round';ctx.shadowBlur=24;ctx.shadowColor=t.c;
     ctx.beginPath();
     if(t.type==='smash'){
-      ctx.moveTo(t.x-t.dir*18,t.y-105);
-      ctx.quadraticCurveTo(t.x+t.dir*75,t.y-62,t.x+t.dir*126,t.y+45);
+      ctx.arc(t.x,t.y-10,108,-2.7,.7);
     }else{
       ctx.moveTo(t.x-t.dir*92,t.y-8);
       ctx.quadraticCurveTo(t.x,t.y-42,t.x+t.dir*150,t.y);
