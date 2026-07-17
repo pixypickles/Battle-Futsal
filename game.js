@@ -153,23 +153,31 @@ class Player {
       const impact=Math.abs(this.vx);
       this.x=arena.left+this.r;
       if(impact>9){
-        this.vx=5.8;this.vy-=2.3;this.stun=Math.max(this.stun,25);this.hitFlash=10;
+        this.vx=0;
+        this.vy=Math.max(-1.8,Math.min(this.vy,4.5));
+        this.stun=Math.max(this.stun,25);this.hitFlash=10;
         hitBursts.push({x:this.x,y:this.y,life:18,color:"#ffffff"});
       }else{
         if(!this.onGround){this.wall=-1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
-        this.vx=Math.max(0,this.vx);
+        this.vx=0;
       }
     } else if(this.x+this.r>arena.right){
       const impact=Math.abs(this.vx);
       this.x=arena.right-this.r;
       if(impact>9){
-        this.vx=-5.8;this.vy-=2.3;this.stun=Math.max(this.stun,25);this.hitFlash=10;
+        this.vx=0;
+        this.vy=Math.max(-1.8,Math.min(this.vy,4.5));
+        this.stun=Math.max(this.stun,25);this.hitFlash=10;
         hitBursts.push({x:this.x,y:this.y,life:18,color:"#ffffff"});
       }else{
         if(!this.onGround){this.wall=1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
-        this.vx=Math.min(0,this.vx);
+        this.vx=0;
       }
     }
+
+    // Safety clamp: a player can never leave the visible arena.
+    this.x=clamp(this.x,arena.left+this.r,arena.right-this.r);
+    this.y=clamp(this.y,arena.top+this.r,arena.floor-this.r);
 
     if(this.anim>0)this.anim--; else this.pose=this.onGround?(Math.abs(this.vx)>1?"run":"idle"):"jump";
   }
@@ -261,78 +269,125 @@ function poseFor(p){
   return pose;
 }
 function drawCharacter(p){
-  const teamColor=p.team==="blue"?"#2db9ff":"#ff5277";
-  const dark=p.team==="blue"?"#113c58":"#5c1830";
-  const skin="#f0bf8a";
-  const pose=poseFor(p);
+  const team=p.team==="blue"?"#2e9eea":"#db4059";
+  const trim=p.team==="blue"?"#bcecff":"#ffd2d9";
+  const skin="#dfb17c";
+  const outline="#07111c";
+  const air=!p.onGround;
+  const run=Math.sin(performance.now()/85+p.x*.03);
+  const attack=p.pose==="attack";
+  const kick=p.pose==="kick";
+  const hurt=p.stun>0;
+
   ctx.save();
-  ctx.translate(p.x,p.y+pose.hipY); if(p.hitFlash>0){ctx.shadowColor="#ffffff";ctx.shadowBlur=22;}
+  ctx.translate(p.x,p.y);
   if(p.facing<0)ctx.scale(-1,1);
+  if(p.hitFlash>0){ctx.shadowColor="#fff";ctx.shadowBlur=22;}
 
-  // ground shadow
-  ctx.save(); ctx.scale(p.facing<0?-1:1,1);
-  ctx.globalAlpha=.22;ctx.fillStyle="#000";
-  ctx.beginPath();ctx.ellipse(0,arena.floor-p.y+22,28,7,0,0,Math.PI*2);ctx.fill();ctx.restore();
-
-  ctx.rotate(pose.bodyRot);
-
-  // scarf / sash
-  ctx.strokeStyle=teamColor;ctx.lineWidth=7;ctx.lineCap="round";
-  ctx.beginPath();ctx.moveTo(-8,-30);
-  ctx.quadraticCurveTo(-35,-34-p.vx*1.2,-45,-18-p.vy*.15);
-  ctx.stroke();
-
-  // back leg then front leg
-  limb(-7,8,19,pose.legB1,20,pose.legB2,10,"#e9edf2");
-  limb(7,8,20,pose.legF1,21,pose.legF2,11,"#f8fbff");
-
-  // torso
-  ctx.fillStyle=teamColor;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.roundRect(-16,-27,32,40,8);ctx.fill();ctx.stroke();
-
-  // belt
-  ctx.fillStyle=dark;ctx.fillRect(-17,5,34,7);
-  ctx.fillStyle="#f6cf55";ctx.beginPath();ctx.arc(0,8.5,4,0,Math.PI*2);ctx.fill();
-
-  // back arm then front arm
-  const backHand=limb(-11,-17,15,pose.armB1,15,pose.armB2,8,skin);
-  const frontHand=limb(11,-17,16,pose.armF1,16,pose.armF2,9,skin);
-
-  // head
-  ctx.fillStyle=skin;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.arc(0,-41,16,0,Math.PI*2);ctx.fill();ctx.stroke();
-
-  // hair / hood
-  ctx.fillStyle=p.kind==="staff"?"#11232f":"#2b1b17";
-  ctx.beginPath();ctx.arc(0,-45,16,Math.PI,Math.PI*2);ctx.lineTo(15,-38);
-  ctx.quadraticCurveTo(4,-30,-15,-37);ctx.closePath();ctx.fill();
-  if(p.kind==="staff"){
-    ctx.fillStyle=teamColor;ctx.fillRect(-13,-45,26,5);
-    ctx.fillStyle="#eafaff";ctx.fillRect(-9,-42,18,3);
-  }else{
-    ctx.fillStyle=teamColor;ctx.beginPath();ctx.arc(0,-58,5,0,Math.PI*2);ctx.fill();
-  }
-
-  // eyes
-  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(5,-40,2,0,Math.PI*2);ctx.fill();
-
-  // weapon — 全員が長棍を両手で持つ
+  // Shadow
   ctx.save();
-  ctx.strokeStyle="#c98a32";ctx.lineWidth=7;ctx.lineCap="round";
-  if(p.pose==="attack" && p.attackType==="down"){
-    const cx=(backHand.x+frontHand.x)/2, cy=(backHand.y+frontHand.y)/2;
-    ctx.beginPath();ctx.moveTo(cx-2,cy-42);ctx.lineTo(cx+7,cy+76);ctx.stroke();
-  }else if(p.pose==="attack"){
-    const cy=(backHand.y+frontHand.y)/2;
-    ctx.beginPath();ctx.moveTo(-45,cy);ctx.lineTo(78,cy);ctx.stroke();
-  }else{
-    ctx.beginPath();ctx.moveTo(-48,-5);ctx.lineTo(49,-20);ctx.stroke();
-  }
+  ctx.globalAlpha=.20;ctx.fillStyle="#000";
+  ctx.beginPath();ctx.ellipse(0,arena.floor-p.y+25,27,7,0,0,Math.PI*2);ctx.fill();
   ctx.restore();
 
-  if(p.stun>0){
+  let bodyRot=0;
+  if(hurt)bodyRot=.55;
+  else if(attack && p.attackType==="down")bodyRot=.24;
+  else if(attack)bodyRot=-.14;
+  else if(air)bodyRot=p.vy<0?-.08:.08;
+  ctx.rotate(bodyRot);
+
+  // Legs: clear, chunky silhouette like the early prototype.
+  ctx.strokeStyle=outline;ctx.lineWidth=10;ctx.lineCap="round";
+  ctx.beginPath();
+  if(kick){
+    ctx.moveTo(-7,8);ctx.lineTo(-13,27);
+    ctx.moveTo(7,7);ctx.lineTo(37,-1);
+  }else if(hurt){
+    ctx.moveTo(-7,8);ctx.lineTo(-27,18);
+    ctx.moveTo(7,8);ctx.lineTo(24,24);
+  }else if(air){
+    ctx.moveTo(-7,8);ctx.lineTo(-18,28);
+    ctx.moveTo(7,8);ctx.lineTo(15,26);
+  }else{
+    ctx.moveTo(-7,8);ctx.lineTo(-10+run*5,29);
+    ctx.moveTo(7,8);ctx.lineTo(11-run*5,29);
+  }
+  ctx.stroke();
+
+  // Robe/body
+  ctx.fillStyle=team;ctx.strokeStyle=outline;ctx.lineWidth=4;
+  ctx.beginPath();ctx.roundRect(-18,-30,36,45,11);ctx.fill();ctx.stroke();
+
+  // Crossed robe lapel
+  ctx.strokeStyle=trim;ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(-12,-25);ctx.lineTo(9,7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(12,-25);ctx.lineTo(-3,-1);ctx.stroke();
+
+  // Belt and hanging sash
+  ctx.fillStyle=outline;ctx.fillRect(-18,3,36,7);
+  ctx.strokeStyle=team;ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(-22,22,-28,13);ctx.stroke();
+
+  // Head
+  ctx.fillStyle=skin;ctx.strokeStyle=outline;ctx.lineWidth=4;
+  ctx.beginPath();ctx.arc(0,-45,17,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+  // Hair/top knot — monk, not ninja
+  ctx.fillStyle="#3c281d";
+  ctx.beginPath();ctx.arc(0,-50,15,Math.PI,Math.PI*2);ctx.lineTo(14,-42);
+  ctx.quadraticCurveTo(4,-32,-14,-41);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.arc(0,-64,7,0,Math.PI*2);ctx.fill();
+
+  // Headband and eyes
+  ctx.fillStyle=team;ctx.fillRect(-15,-50,30,6);
+  ctx.fillStyle=outline;
+  ctx.fillRect(3,-45,4,3);
+
+  // Arms and both hands on staff
+  ctx.strokeStyle=skin;ctx.lineWidth=9;ctx.lineCap="round";
+  let leftHand={x:-18,y:-12}, rightHand={x:19,y:-12};
+  if(attack && p.attackType==="down"){
+    leftHand={x:-7,y:-23};rightHand={x:8,y:-21};
+  }else if(attack){
+    leftHand={x:2,y:-11};rightHand={x:28,y:-10};
+  }else if(kick){
+    leftHand={x:-22,y:-12};rightHand={x:22,y:-18};
+  }
+  ctx.beginPath();ctx.moveTo(-12,-18);ctx.lineTo(leftHand.x,leftHand.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(12,-18);ctx.lineTo(rightHand.x,rightHand.y);ctx.stroke();
+
+  // Long staff, visibly held with both hands.
+  ctx.strokeStyle=outline;ctx.lineWidth=10;ctx.lineCap="round";
+  ctx.beginPath();
+  if(attack && p.attackType==="down"){
+    ctx.moveTo(1,-62);ctx.lineTo(10,72);
+  }else if(attack){
+    ctx.moveTo(-45,-10);ctx.lineTo(92,-10);
+  }else{
+    ctx.moveTo(-53,-5);ctx.lineTo(57,-20);
+  }
+  ctx.stroke();
+  ctx.strokeStyle="#c98a32";ctx.lineWidth=6;
+  ctx.beginPath();
+  if(attack && p.attackType==="down"){
+    ctx.moveTo(1,-62);ctx.lineTo(10,72);
+  }else if(attack){
+    ctx.moveTo(-45,-10);ctx.lineTo(92,-10);
+  }else{
+    ctx.moveTo(-53,-5);ctx.lineTo(57,-20);
+  }
+  ctx.stroke();
+
+  // Hands on top of staff so the grip reads clearly.
+  ctx.fillStyle=skin;ctx.strokeStyle=outline;ctx.lineWidth=2;
+  for(const h of [leftHand,rightHand]){
+    ctx.beginPath();ctx.arc(h.x,h.y,5,0,Math.PI*2);ctx.fill();ctx.stroke();
+  }
+
+  if(hurt){
     ctx.strokeStyle="#ffd94a";ctx.lineWidth=3;
-    ctx.beginPath();ctx.arc(0,-68,13,0,Math.PI*1.5);ctx.stroke();
+    ctx.beginPath();ctx.arc(0,-72,14,0,Math.PI*1.55);ctx.stroke();
   }
   ctx.restore();
 }
@@ -508,7 +563,7 @@ function score(team){
   statusEl.textContent=(team==="blue"?"BLUE":"RED")+" GOAL!";
   ball.reset();
   players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});
-  setTimeout(()=>statusEl.textContent="J: 横突き　空中で↓＋J: 真下への振り下ろし",700);
+  setTimeout(()=>statusEl.textContent="長棍を両手持ち｜J: 横突き｜空中で↓＋J: 振り下ろし",700);
 }
 
 function drawArena(){
