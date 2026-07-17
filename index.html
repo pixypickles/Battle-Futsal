@@ -1,40 +1,380 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Combat Airball Prototype 2.2</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Combat Airball Prototype 2.7</title>
+<style>
+  :root{
+    --bg:#0d1326; --panel:#151e37; --ink:#f3f6ff; --muted:#a9b6d2;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 15%,#263557 0,#0d1326 62%);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+  #wrap{height:100%;display:grid;place-items:center;padding:12px}
+  #stage{position:relative;width:min(1280px,calc(100vw - 24px));aspect-ratio:16/9;border:2px solid #516184;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px #0008;background:#0b1020}
+  canvas{width:100%;height:100%;display:block}
+  #hud{position:absolute;inset:0;pointer-events:none}
+  #top{display:flex;justify-content:center;align-items:center;gap:18px;padding:14px;font-weight:900;text-shadow:0 2px 5px #000}
+  .score{font-size:34px;min-width:50px;text-align:center}
+  .blue{color:#7bdcff}.red{color:#ff8795}
+  #timer{font-size:22px;padding:6px 13px;background:#0b1020aa;border:1px solid #ffffff28;border-radius:999px}
+  #help{position:absolute;left:16px;bottom:14px;font-size:13px;line-height:1.55;color:#dce7ff;background:#091022b8;border:1px solid #ffffff20;border-radius:12px;padding:10px 12px;backdrop-filter:blur(8px)}
+  #notice{position:absolute;left:50%;top:23%;transform:translateX(-50%);font-weight:1000;font-size:clamp(28px,5vw,66px);letter-spacing:.05em;text-shadow:0 5px 0 #0008,0 0 22px currentColor;opacity:0;transition:opacity .12s}
+  #badge{position:absolute;right:14px;bottom:14px;color:#c7d2ed;font-size:12px;background:#091022a8;padding:7px 10px;border-radius:10px;border:1px solid #ffffff1b}
+  #start{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(#07101bd4,#0a1024dc);pointer-events:auto}
+  #card{width:min(690px,90%);padding:28px;border-radius:22px;background:#111a32e8;border:1px solid #ffffff2c;box-shadow:0 28px 90px #0009;text-align:center}
+  h1{margin:0 0 8px;font-size:clamp(31px,5vw,58px);letter-spacing:.02em}
+  .lead{color:#c1cdec;margin:0 auto 20px;max-width:560px;line-height:1.65}
+  button{appearance:none;border:0;border-radius:999px;padding:14px 28px;font:inherit;font-weight:900;font-size:18px;color:#07101b;background:linear-gradient(180deg,#fff9a8,#ffbe40);box-shadow:0 8px 0 #9c5e13,0 16px 28px #0006;cursor:pointer}
+  button:active{transform:translateY(5px);box-shadow:0 3px 0 #9c5e13}
+  .small{font-size:12px;color:#91a0c0;margin-top:16px}
+  @media(max-width:700px){#help{font-size:11px}.score{font-size:28px}}
+</style>
 </head>
 <body>
-  <main class="app">
-    <header class="hud">
-      <div class="title">COMBAT AIRBALL</div>
-      <div class="score"><span class="blue">BLUE <b id="blueScore">0</b></span><span>–</span><span class="red"><b id="redScore">0</b> RED</span></div>
-    </header>
-
-    <section class="game-wrap">
-      <canvas id="game" width="720" height="1080" aria-label="Combat Airball game canvas"></canvas>
-      <div class="status" id="status">A: 武器　B: キック　C: ジャンプ</div>
-    </section>
-
-    <section class="controls">
-      <div class="pad" id="pad">
-        <button class="left" data-key="ArrowLeft">◀</button>
-        <button class="down" data-key="ArrowDown">▼</button>
-        <button class="right" data-key="ArrowRight">▶</button>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="1280" height="720"></canvas>
+    <div id="hud">
+      <div id="top"><div class="score blue" id="sBlue">0</div><div id="timer">90</div><div class="score red" id="sRed">0</div></div>
+      <div id="notice"></div>
+      <div id="help">
+        <b>青チーム（操作）</b><br>
+        移動：A / D　ジャンプ：W<br>
+        長棍：F　キック：G<br>
+        <span style="color:#9fb0cf">空中F＝横シュート / 空中G＝蹴り上げ</span>
       </div>
-      <div class="buttons">
-        <button class="a" data-key="KeyJ"><strong>A</strong><span>武器</span></button>
-        <button class="b" data-key="KeyK"><strong>B</strong><span>キック</span></button>
-        <button class="c" data-key="KeyL"><strong>C</strong><span>ジャンプ</span></button>
+      <div id="badge">Combat Airball Prototype 2.7</div>
+      <div id="start">
+        <div id="card">
+          <h1>COMBAT AIRBALL</h1>
+          <p class="lead">ボールを蹴り上げ、全員で空へ。長棍の横突きで相手ごと吹き飛ばし、左右のゴールへ叩き込め。</p>
+          <button id="play">試合開始</button>
+          <div class="small">青1体を操作。残り3体はAIです。Enterでも開始できます。</div>
+        </div>
       </div>
-    </section>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W=1280,H=720, FLOOR=630, LEFT=62, RIGHT=1218;
+const GOAL_TOP=355, GOAL_BOTTOM=525, GOAL_DEPTH=46;
+const BLUE=0, RED=1;
+const keys = new Set();
+let last=0, running=false, gameTime=90, scores=[0,0], freeze=0, shake=0, resetTimer=0;
+const particles=[], trails=[];
+const ui={
+  blue:document.getElementById('sBlue'),
+  red:document.getElementById('sRed'),
+  timer:document.getElementById('timer'),
+  notice:document.getElementById('notice'),
+  start:document.getElementById('start')
+};
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function lerp(a,b,t){return a+(b-a)*t}
+function sign(v){return v<0?-1:1}
+function dist2(a,b){const x=a.x-b.x,y=a.y-b.y;return x*x+y*y}
+function rnd(a,b){return a+Math.random()*(b-a)}
+function circleHit(ax,ay,ar,bx,by,br){const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy<(ar+br)*(ar+br)}
 
-    <footer>
-      移動: A/D・←/→　S/↓＋J: 空中振り下ろし　J: 横突き　K: キック　L: ジャンプ　R: リセット
-    </footer>
-  </main>
-  <script src="game.js"></script>
+class Fighter{
+  constructor(x,team,ai=false){
+    this.x=x; this.y=FLOOR-43; this.vx=0; this.vy=0; this.team=team; this.ai=ai;
+    this.facing=team===BLUE?1:-1; this.onGround=true; this.coyote=0;
+    this.attack=0; this.attackKind=''; this.kick=0; this.stun=0; this.wallStun=0;
+    this.jumpBuffer=0; this.attackCd=0; this.kickCd=0; this.flash=0; this.id=Math.random();
+    this.targetX=x; this.airJumps=1;
+  }
+  control(dt){
+    if(this.stun>0){this.stun-=dt; return}
+    let move=0, jump=false, attack=false, kick=false;
+    if(!this.ai){
+      move=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
+      jump=pressed('KeyW');
+      attack=pressed('KeyF');
+      kick=pressed('KeyG');
+    } else {
+      const b=ball;
+      const attackRange=Math.abs(b.x-this.x)<135 && Math.abs(b.y-this.y)<90;
+      const enemy=nearestEnemy(this);
+      const defend = (this.team===BLUE && b.x<520)||(this.team===RED && b.x>760);
+      let tx=b.x;
+      if(defend) tx=this.team===BLUE?340:940;
+      if(enemy && Math.abs(enemy.x-this.x)<120 && Math.abs(enemy.y-this.y)<95 && Math.random()<0.035) attack=true;
+      if(attackRange){
+        if(!this.onGround && Math.abs(b.x-this.x)<120) attack=Math.random()<0.11;
+        else if(Math.random()<0.075) kick=true;
+      }
+      if(b.y<this.y-80 && Math.abs(b.x-this.x)<260 && (this.onGround||this.airJumps>0) && Math.random()<0.05) jump=true;
+      move=Math.abs(tx-this.x)>28?sign(tx-this.x):0;
+      if(!this.onGround && Math.random()<0.015) move=sign(b.x-this.x);
+    }
+    if(move){
+      const accel=this.onGround?1700:1050;
+      this.vx+=move*accel*dt; this.facing=move;
+    }
+    const max=this.onGround?320:360;
+    this.vx=clamp(this.vx,-max,max);
+    if(jump) this.jumpBuffer=.13;
+    if(this.jumpBuffer>0){
+      this.jumpBuffer-=dt;
+      if(this.onGround||this.coyote>0){
+        this.vy=-690; this.onGround=false; this.coyote=0; this.jumpBuffer=0; burst(this.x,this.y+38,'#dff7ff',8);
+      }else if(this.airJumps>0){
+        this.vy=-610; this.airJumps--; this.jumpBuffer=0; burst(this.x,this.y+26,'#cfe9ff',10);
+      }
+    }
+    if(attack && this.attackCd<=0){
+      this.attack=.42; this.attackCd=.48; this.attackKind=this.onGround?'ground':'air';
+      this.vx+=this.facing*(this.onGround?45:95);
+    }
+    if(kick && this.kickCd<=0){this.kick=.31; this.kickCd=.38}
+  }
+  update(dt){
+    this.control(dt);
+    this.attackCd=Math.max(0,this.attackCd-dt); this.kickCd=Math.max(0,this.kickCd-dt);
+    this.flash=Math.max(0,this.flash-dt); this.wallStun=Math.max(0,this.wallStun-dt);
+    if(this.attack>0) this.attack-=dt;
+    if(this.kick>0) this.kick-=dt;
+    if(!this.onGround){this.vy+=1350*dt; this.coyote=Math.max(0,this.coyote-dt)}
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    this.vx*=Math.pow(this.onGround?.80:.965,dt*60);
+    if(this.y>=FLOOR-43){
+      if(this.vy>250) burst(this.x,FLOOR-2,'#ffffff',5);
+      this.y=FLOOR-43; this.vy=0; this.onGround=true; this.coyote=.09; this.airJumps=1;
+    }else if(this.onGround){this.onGround=false}
+    if(this.x<LEFT+28){
+      this.x=LEFT+28;
+      if(this.vx<-250){wallImpact(this,1)}
+      else this.vx=Math.max(0,this.vx);
+    }
+    if(this.x>RIGHT-28){
+      this.x=RIGHT-28;
+      if(this.vx>250){wallImpact(this,-1)}
+      else this.vx=Math.min(0,this.vx);
+    }
+    this.performHits();
+  }
+  performHits(){
+    if(this.attack>0){
+      const elapsed=(this.attackKind==='ground'?.42:.42)-this.attack;
+      const active=elapsed>.07&&elapsed<.27;
+      if(active){
+        const reach=this.attackKind==='air'?150:142;
+        const hx=this.x+this.facing*(70+reach*.45), hy=this.y+(this.attackKind==='air'?-7:-3);
+        for(const o of fighters){
+          if(o===this || o.team===this.team || o.flash>.06) continue;
+          if(circleHit(hx,hy,70,o.x,o.y,31)){
+            o.vx=this.facing*(this.attackKind==='air'?720:610);
+            o.vy=this.attackKind==='air'?-80:-125;
+            o.stun=.22; o.flash=.14; freeze=.045; shake=14;
+            burst(o.x,o.y,'#fff6b0',18); slashTrail(this.x,this.y,this.facing,'#fff2a6');
+          }
+        }
+        if(ball.hitCd<=0 && circleHit(hx,hy,78,ball.x,ball.y,ball.r)){
+          if(this.attackKind==='air'){
+            ball.vx=this.facing*920; ball.vy=clamp(ball.vy*.15-20,-180,180);
+          }else{
+            ball.vx=this.facing*230; ball.vy=-820;
+          }
+          ball.lastTeam=this.team; ball.hitCd=.12; freeze=.055; shake=17;
+          burst(ball.x,ball.y,'#ffffff',22); slashTrail(this.x,this.y,this.facing,'#ffffff');
+        }
+      }
+    }
+    if(this.kick>0){
+      const elapsed=.31-this.kick;
+      if(elapsed>.08&&elapsed<.21 && ball.hitCd<=0){
+        const hx=this.x+this.facing*28, hy=this.y+28;
+        if(circleHit(hx,hy,66,ball.x,ball.y,ball.r)){
+          ball.vx+=this.facing*90;
+          ball.vy=-900;
+          ball.lastTeam=this.team; ball.hitCd=.12; freeze=.035; shake=9;
+          burst(ball.x,ball.y,'#b9f4ff',14);
+        }
+      }
+    }
+  }
+  draw(){
+    const t=performance.now()/1000;
+    const teamC=this.team===BLUE?'#43b9ff':'#ff576d';
+    const dark=this.team===BLUE?'#1269a5':'#a61f36';
+    const attackP=this.attack>0?1-this.attack/.42:0;
+    const kickP=this.kick>0?1-this.kick/.31:0;
+    ctx.save(); ctx.translate(this.x,this.y);
+    if(this.flash>0){ctx.shadowBlur=28;ctx.shadowColor='#fff'}
+    // shadow
+    ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,42,29,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+    // robe
+    ctx.fillStyle=dark; roundRect(-21,-6,42,48,13);ctx.fill();
+    ctx.fillStyle=teamC; roundRect(-18,-9,36,42,12);ctx.fill();
+    ctx.fillStyle='#f7ddb2';ctx.beginPath();ctx.arc(0,-30,18,0,Math.PI*2);ctx.fill();
+    // hood/headband
+    ctx.strokeStyle=teamC;ctx.lineWidth=7;ctx.beginPath();ctx.arc(0,-31,17,Math.PI,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#243047';ctx.beginPath();ctx.arc(this.facing*5,-31,2.4,0,Math.PI*2);ctx.fill();
+    // legs
+    ctx.strokeStyle='#d7e1f1';ctx.lineWidth=8;ctx.lineCap='round';
+    let legLift=kickP>0?Math.sin(Math.min(1,kickP)*Math.PI)*20:0;
+    ctx.beginPath();ctx.moveTo(-9,31);ctx.lineTo(-13,44);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(9,31);ctx.lineTo(12+this.facing*legLift,44-legLift*.45);ctx.stroke();
+
+    // staff pose, always two-handed
+    let ang=-.08*this.facing, sx=-40*this.facing, sy=-10;
+    if(this.attack>0){
+      if(this.attackKind==='air'){
+        const p=easeOutBack(Math.min(1,attackP*1.35));
+        sx=(-55+125*p)*this.facing; ang=lerp(-.08,0,p)*this.facing;
+      }else{
+        if(attackP<.48){const p=easeOutBack(attackP/.48);sx=lerp(-52,78,p)*this.facing;ang=-.04*this.facing}
+        else{const p=(attackP-.48)/.52;sx=78*this.facing;sy=lerp(-8,-32,p);ang=lerp(-.04,-.72,p)*this.facing}
+      }
+    }
+    ctx.save();ctx.translate(sx,sy);ctx.rotate(ang);
+    ctx.strokeStyle='#68411f';ctx.lineWidth=8;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-100*this.facing,0);ctx.lineTo(100*this.facing,0);ctx.stroke();
+    ctx.strokeStyle='#f6cf63';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-100*this.facing,0);ctx.lineTo(100*this.facing,0);ctx.stroke();
+    ctx.restore();
+    // arms toward staff
+    ctx.strokeStyle='#f7ddb2';ctx.lineWidth=8;
+    ctx.beginPath();ctx.moveTo(-10,-3);ctx.lineTo(sx*.38,sy*.45);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(10,-4);ctx.lineTo(sx*.62,sy*.68);ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function easeOutBack(x){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)}
+function wallImpact(f,dir){
+  f.vx=0; f.vy=Math.min(f.vy,80); f.stun=.38; f.wallStun=.38; shake=18; freeze=.045;
+  burst(f.x,f.y,'#ffffff',24);
+  for(let i=0;i<8;i++) particles.push({x:f.x,y:f.y,vx:dir*rnd(60,300),vy:rnd(-220,220),life:rnd(.18,.5),max:.5,size:rnd(2,6),c:'#a6b7d9'});
+}
+function nearestEnemy(f){
+  let best=null,bd=1e9; for(const o of fighters){if(o.team!==f.team){const d=dist2(f,o);if(d<bd){bd=d;best=o}}} return best;
+}
+
+class Ball{
+  constructor(){this.r=18;this.reset()}
+  reset(){this.x=W/2;this.y=310;this.vx=rnd(-80,80);this.vy=-80;this.hitCd=0;this.lastTeam=-1}
+  update(dt){
+    this.hitCd=Math.max(0,this.hitCd-dt);
+    this.vy+=620*dt; this.x+=this.vx*dt; this.y+=this.vy*dt;
+    this.vx*=Math.pow(.996,dt*60);
+    if(this.y>FLOOR-this.r){this.y=FLOOR-this.r;this.vy=-Math.abs(this.vy)*.66;if(Math.abs(this.vy)<80)this.vy=-80;this.vx*=.93}
+    if(this.y<this.r+38){this.y=this.r+38;this.vy=Math.abs(this.vy)*.72}
+    const inGoalY=this.y>GOAL_TOP&&this.y<GOAL_BOTTOM;
+    if(this.x<LEFT+GOAL_DEPTH && inGoalY){score(RED);return}
+    if(this.x>RIGHT-GOAL_DEPTH && inGoalY){score(BLUE);return}
+    if(this.x<LEFT+this.r){this.x=LEFT+this.r;this.vx=Math.abs(this.vx)*.75}
+    if(this.x>RIGHT-this.r){this.x=RIGHT-this.r;this.vx=-Math.abs(this.vx)*.75}
+  }
+  draw(){
+    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(performance.now()/350);
+    ctx.shadowBlur=25;ctx.shadowColor='#fff';
+    const g=ctx.createRadialGradient(-6,-7,2,0,0,22);g.addColorStop(0,'#fff');g.addColorStop(.55,'#e8f6ff');g.addColorStop(1,'#6ecdf3');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,this.r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#274c6a';ctx.lineWidth=2;
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(0,0,6+i*4,i*1.8,i*1.8+1.4);ctx.stroke()}
+    ctx.restore();
+  }
+}
+
+const fighters=[
+  new Fighter(300,BLUE,false),new Fighter(455,BLUE,true),
+  new Fighter(825,RED,true),new Fighter(980,RED,true)
+];
+const ball=new Ball();
+const pressQueue=new Set();
+addEventListener('keydown',e=>{
+  if(['KeyA','KeyD','KeyW','KeyF','KeyG','Enter','Space'].includes(e.code)) e.preventDefault();
+  if(!keys.has(e.code)) pressQueue.add(e.code);
+  keys.add(e.code);
+  if(e.code==='Enter'&&!running) startGame();
+});
+addEventListener('keyup',e=>keys.delete(e.code));
+function pressed(code){if(pressQueue.has(code)){pressQueue.delete(code);return true}return false}
+document.getElementById('play').onclick=startGame;
+
+function startGame(){
+  running=true; gameTime=90;scores=[0,0];ui.start.style.display='none';resetPositions();showNotice('AIRBALL!', '#fff4a6');
+}
+function resetPositions(){
+  const xs=[300,455,825,980];
+  fighters.forEach((f,i)=>{f.x=xs[i];f.y=FLOOR-43;f.vx=f.vy=0;f.stun=0;f.attack=0;f.kick=0;f.onGround=true;f.airJumps=1});
+  ball.reset(); resetTimer=.65;
+}
+function score(team){
+  if(resetTimer>0)return;
+  scores[team]++; ui.blue.textContent=scores[0];ui.red.textContent=scores[1];
+  showNotice(team===BLUE?'BLUE GOAL!':'RED GOAL!',team===BLUE?'#79dbff':'#ff8290');
+  shake=30;freeze=.12; burst(ball.x,ball.y,team===BLUE?'#7bdcff':'#ff8795',55);
+  resetPositions();
+}
+function showNotice(text,color){
+  ui.notice.textContent=text;ui.notice.style.color=color;ui.notice.style.opacity=1;
+  clearTimeout(showNotice.t);showNotice.t=setTimeout(()=>ui.notice.style.opacity=0,900);
+}
+function burst(x,y,c,n){
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=rnd(70,420);particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rnd(.18,.65),max:.65,size:rnd(2,8),c})}
+}
+function slashTrail(x,y,dir,c){trails.push({x,y,dir,c,life:.18,max:.18})}
+
+function update(dt){
+  if(!running)return;
+  if(freeze>0){freeze-=dt;return}
+  resetTimer=Math.max(0,resetTimer-dt);
+  gameTime-=dt; if(gameTime<=0){gameTime=0;running=false;ui.start.style.display='grid';document.querySelector('#card h1').textContent=scores[0]===scores[1]?'DRAW!':scores[0]>scores[1]?'BLUE WINS!':'RED WINS!';document.querySelector('#card .lead').textContent=`最終スコア ${scores[0]} - ${scores[1]}`;document.getElementById('play').textContent='もう一度';}
+  ui.timer.textContent=Math.ceil(gameTime);
+  fighters.forEach(f=>f.update(dt)); ball.update(dt);
+  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=520*dt;p.vx*=.985;if(p.life<=0)particles.splice(i,1)}
+  for(let i=trails.length-1;i>=0;i--){trails[i].life-=dt;if(trails[i].life<=0)trails.splice(i,1)}
+  shake=Math.max(0,shake-70*dt);
+  pressQueue.clear();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
+function drawArena(){
+  const grd=ctx.createLinearGradient(0,0,0,H);grd.addColorStop(0,'#172345');grd.addColorStop(.65,'#0d1832');grd.addColorStop(1,'#09101f');ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  // distant bands
+  ctx.globalAlpha=.16;ctx.strokeStyle='#6e83bd';ctx.lineWidth=2;
+  for(let y=110;y<580;y+=70){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.globalAlpha=1;
+  // floor trampoline
+  ctx.fillStyle='#101b31';ctx.fillRect(0,FLOOR,W,H-FLOOR);
+  ctx.strokeStyle='#a5d9ff';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(LEFT,FLOOR);ctx.quadraticCurveTo(W/2,FLOOR+16,RIGHT,FLOOR);ctx.stroke();
+  ctx.globalAlpha=.3;ctx.strokeStyle='#5d77a7';ctx.lineWidth=2;for(let x=LEFT;x<RIGHT;x+=48){ctx.beginPath();ctx.moveTo(x,FLOOR+2);ctx.lineTo(x+20,H);ctx.stroke()}ctx.globalAlpha=1;
+  // side walls
+  ctx.strokeStyle='#7586aa';ctx.lineWidth=5;ctx.strokeRect(LEFT,38,RIGHT-LEFT,FLOOR-38);
+  // goals + upward-shot guard lips
+  drawGoal(LEFT,1,'#47c6ff');drawGoal(RIGHT,-1,'#ff6074');
+  // center
+  ctx.setLineDash([9,12]);ctx.strokeStyle='#ffffff2d';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2,70);ctx.lineTo(W/2,FLOOR);ctx.stroke();ctx.setLineDash([]);
+}
+function drawGoal(x,dir,c){
+  ctx.save();ctx.strokeStyle=c;ctx.lineWidth=7;ctx.shadowBlur=18;ctx.shadowColor=c;
+  ctx.beginPath();ctx.moveTo(x,GOAL_TOP);ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_TOP);ctx.lineTo(x+dir*GOAL_DEPTH,GOAL_BOTTOM);ctx.lineTo(x,GOAL_BOTTOM);ctx.stroke();
+  // mouse-guard lip
+  ctx.lineWidth=11;ctx.beginPath();ctx.moveTo(x+dir*4,GOAL_BOTTOM);ctx.lineTo(x+dir*34,GOAL_BOTTOM-19);ctx.stroke();
+  ctx.globalAlpha=.26;ctx.fillStyle=c;ctx.fillRect(dir>0?x:x-GOAL_DEPTH,GOAL_TOP,GOAL_DEPTH,GOAL_BOTTOM-GOAL_TOP);ctx.restore();
+}
+function draw(){
+  ctx.save();
+  const sx=shake?rnd(-shake,shake):0, sy=shake?rnd(-shake*.55,shake*.55):0;ctx.translate(sx,sy);
+  drawArena();
+  // trails behind actors
+  for(const t of trails){
+    const a=t.life/t.max;ctx.save();ctx.globalAlpha=a*.78;ctx.strokeStyle=t.c;ctx.lineWidth=26*a+4;ctx.lineCap='round';ctx.shadowBlur=24;ctx.shadowColor=t.c;
+    ctx.beginPath();ctx.moveTo(t.x-t.dir*92,t.y-8);ctx.quadraticCurveTo(t.x,t.y-42,t.x+t.dir*150,t.y);ctx.stroke();ctx.restore();
+  }
+  ball.draw();fighters.forEach(f=>f.draw());
+  for(const p of particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+  ctx.restore();
+}
+function loop(ts){const dt=Math.min(.033,(ts-last)/1000||0);last=ts;update(dt);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+})();
+</script>
 </body>
 </html>
