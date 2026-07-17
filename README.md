@@ -1,11 +1,8 @@
-# Combat Airball v0.3b
+# Combat Airball v0.4 — Ring Physics
 
-Vertical-physics hotfix.
+- J / A: class weapon
+- K / B: ground kick or aerial volley
+- L / C: jump / wall jump
+- R: reset
 
-- Players now always return to the floor after a jump.
-- The ball receives guaranteed downward acceleration and cannot remain suspended indefinitely.
-- Jump uses a tap trigger instead of firing continuously while the key is held.
-- AI/player jump cooldowns prevent immediate endless re-jumping.
-- Ceiling rebounds lose more energy.
-
-Open `index.html` in a modern browser.
+The narrow vertical ring uses curved walls to lift the ball. Any ball that passes through a ring scores, including direct wall rebounds. Players use separation collision and cannot overlap.
