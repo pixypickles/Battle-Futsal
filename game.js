@@ -6,8 +6,8 @@ const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
 const arena = {
-  left: 78, right: W - 78, top: 46, floor: H - 54,
-  goalY: 220, goalR: 56
+  left: 52, right: W - 52, top: 34, floor: H - 48,
+  goalY: 350, goalR: 44
 };
 
 const keys = new Set();
@@ -40,10 +40,10 @@ const blueScoreEl = document.getElementById("blueScore");
 const redScoreEl = document.getElementById("redScore");
 const statusEl = document.getElementById("status");
 
-const GRAVITY = 0.48;
-const BALL_GRAVITY = 0.27;
-const FLOOR_BOUNCE = 0.42;
-const MAX_BALL_SPEED = 19;
+const GRAVITY = 0.38;
+const BALL_GRAVITY = 0.18;
+const FLOOR_BOUNCE = 0.36;
+const MAX_BALL_SPEED = 12.5;
 const KICK_COOLDOWN = 22;
 const ATTACK_COOLDOWN = 40;
 
@@ -58,6 +58,7 @@ class Player {
     this.facing=team==="blue"?1:-1;
     this.onGround=true; this.wall=0; this.wallTimer=0;
     this.jumpBuffer=0; this.kickTimer=0; this.attackTimer=0;
+    this.airJumpAvailable=true;
     this.stun=0; this.anim=0; this.pose="idle";
   }
   update() {
@@ -91,11 +92,20 @@ class Player {
       this.vx=clamp(this.vx,-6.2,6.2);
 
       if(this.wall && this.jumpBuffer>0){
-        this.vy=-12.7;
-        this.vx=-this.wall*8.8;
+        this.vy=-17.0;
+        this.vx=-this.wall*7.4;
         this.wall=0; this.wallTimer=0; this.jumpBuffer=0;
+        this.airJumpAvailable=false;
       } else if(this.onGround && this.jumpBuffer>0){
-        this.vy=-14.2; this.onGround=false; this.jumpBuffer=0;
+        this.vy=-18.0; this.onGround=false; this.jumpBuffer=0;
+        this.airJumpAvailable=true;
+      } else if(!this.onGround && this.jumpBuffer>0 && this.airJumpAvailable){
+        // 見えない奥壁を蹴るイメージの空中壁ジャンプ
+        this.vy=-16.2;
+        this.vx += move*2.6;
+        this.airJumpAvailable=false;
+        this.jumpBuffer=0;
+        this.pose="walljump"; this.anim=12;
       }
 
       if(kick && this.kickTimer<=0){
@@ -114,9 +124,10 @@ class Player {
     this.onGround=false;
     if(this.y+this.r>=arena.floor){
       this.y=arena.floor-this.r;
-      if(this.vy>4.2) this.vy=-Math.min(6.0,this.vy*FLOOR_BOUNCE);
+      if(this.vy>4.2) this.vy=-Math.min(5.0,this.vy*FLOOR_BOUNCE);
       else {this.vy=0; this.onGround=true;}
-      if(this.jumpBuffer>0){this.vy=-14.2;this.onGround=false;this.jumpBuffer=0;}
+      this.airJumpAvailable=true;
+      if(this.jumpBuffer>0){this.vy=-18.0;this.onGround=false;this.jumpBuffer=0;}
     }
     if(this.y-this.r<arena.top){
       this.y=arena.top+this.r; this.vy=Math.abs(this.vy)*.45;
@@ -235,10 +246,10 @@ class Ball {
 
 let blueScore=0, redScore=0;
 const players=[
-  new Player("blue","ninja",210,false),
-  new Player("blue","staff",355,true),
-  new Player("red","staff",605,true),
-  new Player("red","ninja",750,true)
+  new Player("blue","ninja",155,false),
+  new Player("blue","staff",270,true),
+  new Player("red","staff",450,true),
+  new Player("red","ninja",565,true)
 ];
 const ball=new Ball();
 
@@ -257,8 +268,8 @@ function kickBall(p){
   const dx=ball.x-p.x,dy=ball.y-p.y,d=len(dx,dy);
   if(d<78){
     const air=!p.onGround;
-    const power=air?13.8:11.2;
-    const lift=air?-7.4:-10.1; // ground lift reaches about 2/3 goal height
+    const power=air?10.2:8.4;
+    const lift=air?-6.2:-8.8; // 低速で大きな弧を描く
     ball.vx=p.facing*power + p.vx*.55;
     ball.vy=lift + (air?p.vy*.18:0);
     ball.lastTouch=p.team;ball.wallHits=0;
@@ -299,7 +310,7 @@ function score(team){
   blueScoreEl.textContent=blueScore;redScoreEl.textContent=redScore;
   statusEl.textContent=(team==="blue"?"BLUE":"RED")+" GOAL!";
   ball.reset();
-  players.forEach((p,i)=>{p.x=[210,355,605,750][i];p.y=arena.floor-32;p.vx=p.vy=0;});
+  players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});
   setTimeout(()=>statusEl.textContent="A: 武器　B: キック　C: ジャンプ",700);
 }
 
@@ -309,7 +320,12 @@ function drawArena(){
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 
   // height bands
-  const bands=[{y:arena.floor-90,c:"#188ee5"},{y:arena.floor-185,c:"#25d8d0"},{y:arena.goalY,c:"#f6d43a"},{y:arena.top+95,c:"#d9df6b"}];
+  const bands=[
+    {y:arena.floor-150,c:"#188ee5"},
+    {y:arena.floor-330,c:"#25d8d0"},
+    {y:arena.goalY,c:"#f6d43a"},
+    {y:arena.top+150,c:"#d9df6b"}
+  ];
   ctx.lineWidth=2;
   bands.forEach((b,i)=>{
     ctx.strokeStyle=b.c;ctx.globalAlpha=.34;
@@ -341,7 +357,7 @@ function drawProjectiles(){
 }
 
 function update(){
-  if(pressed.has("KeyR")){blueScore=redScore=0;blueScoreEl.textContent=0;redScoreEl.textContent=0;ball.reset();}
+  if(pressed.has("KeyR")){blueScore=redScore=0;blueScoreEl.textContent=0;redScoreEl.textContent=0;ball.reset();players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});}
   players.forEach(p=>p.update());
   separatePlayers();
   updateProjectiles();

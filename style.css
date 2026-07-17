@@ -36,3 +36,10 @@ footer{margin-top:12px;padding:14px;text-align:center;border-radius:0 0 20px 20p
   .controls{gap:8px}.buttons{gap:6px}.pad{gap:6px}
   footer{font-size:12px}
 }
+
+/* Prototype 2.1: portrait-first tall arena */
+.game-wrap { max-width: 720px; margin-inline: auto; }
+canvas { aspect-ratio: 2 / 3; object-fit: contain; }
+@media (min-width: 850px) {
+  .app { width: 780px; }
+}
