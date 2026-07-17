@@ -1,8 +1,9 @@
-# Combat Airball v0.4 — Ring Physics
+# Combat Airball v0.5 — Bounce Ring
 
-- J / A: class weapon
-- K / B: ground kick or aerial volley
-- L / C: jump / wall jump
-- R: reset
+- 左右に大きなゴールリングを1つずつ配置
+- 壁へ触れると短時間張り付き（忍者は長め）
+- 張り付き中にジャンプで壁ジャンプ
+- 床は弱いトランポリンで、選手とボールが再び浮く
+- A: 武器 / B: キック・空中ボレー / C: ジャンプ
 
-The narrow vertical ring uses curved walls to lift the ball. Any ball that passes through a ring scores, including direct wall rebounds. Players use separation collision and cannot overlap.
+`index.html` をブラウザで開いてください。
