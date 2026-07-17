@@ -1,23 +1,11 @@
-# Combat Airball v0.3 — Dome Rebuild
+# Combat Airball v0.3b
 
-ブラウザで `index.html` を開いてください。外部ライブラリや通信は不要です。
+Vertical-physics hotfix.
 
-## 操作
-- WASD / 矢印: 移動
-- J: 武器
-- K: トス
-- L: ジャンプ（空中ではボレー／壁際では壁ジャンプ）
-- R: リセット
+- Players now always return to the floor after a jump.
+- The ball receives guaranteed downward acceleration and cannot remain suspended indefinitely.
+- Jump uses a tap trigger instead of firing continuously while the key is held.
+- AI/player jump cooldowns prevent immediate endless re-jumping.
+- Ceiling rebounds lose more energy.
 
-## 今回の主な変更
-- 初期版を意識した円形コートへ再構築
-- 東西南北、十字位置の4リング
-- 縦長の透明ドーム（壁・天井で反射）
-- 高い超人的ジャンプと長めの滞空時間
-- 落下がやや遅い特殊競技用ボール
-- 大きめでイラスト調の忍者・棍モンク・手甲モンク
-- 自分のトスからは得点不可、味方・敵のトスからは得点可能
-- ボール異常値のフェイルセーフとコート外脱出防止
-
-## 補足
-青チームは西・北のリング、赤チームは東・南のリングを守ります。得点は空中ボレーのみです。
+Open `index.html` in a modern browser.
