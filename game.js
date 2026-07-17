@@ -71,7 +71,7 @@
     guardBall(){ this.guard=true; this.vx*=.54; this.vy*=.54; }
   }
 
-  const ball={x:0,y:0,z:12,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0};
+  const ball={x:0,y:0,z:12,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0,wallTouch:0};
   const player=new Actor(0,170,'blue',true), enemy=new Actor(0,-170,'red',false);
 
   function angleDiff(a,b){ return Math.atan2(Math.sin(a-b),Math.cos(a-b)); }
@@ -102,13 +102,44 @@
   function updateBall(dt){
     if(ball.owner){ const a=ball.owner; ball.x=a.x+Math.cos(a.facing)*30; ball.y=a.y+Math.sin(a.facing)*30; ball.z=14; ball.vx=a.vx; ball.vy=a.vy; ball.vz=0; return; }
     ball.prevY=ball.y;
+    ball.wallTouch=Math.max(0,ball.wallTouch-dt);
     ball.x+=ball.vx*dt; ball.y+=ball.vy*dt; ball.z+=ball.vz*dt; ball.vz-=850*dt;
-    if(ball.z<=ball.r){ ball.z=ball.r; if(ball.vz<0)ball.vz*=-.42; ball.vx*=Math.pow(.12,dt); ball.vy*=Math.pow(.12,dt); }
+    if(ball.z<=ball.r){
+      ball.z=ball.r;
+      if(ball.vz<0)ball.vz*=-.36;
+      ball.vx*=Math.pow(.09,dt); ball.vy*=Math.pow(.09,dt);
+      if(Math.hypot(ball.vx,ball.vy)<18){ ball.vx=0; ball.vy=0; }
+    }
     const d=Math.hypot(ball.x,ball.y), max=FIELD.r-ball.r;
-    if(d>max){ const nx=ball.x/d, ny=ball.y/d, dot=ball.vx*nx+ball.vy*ny; ball.x=nx*max; ball.y=ny*max; ball.vx-=1.75*dot*nx; ball.vy-=1.75*dot*ny; }
+    if(d>max){
+      const nx=ball.x/d, ny=ball.y/d;
+      const tx=-ny, ty=nx;
+      const vn=ball.vx*nx+ball.vy*ny;
+      const vt=ball.vx*tx+ball.vy*ty;
+      ball.x=nx*(max-2); ball.y=ny*(max-2);
+      // The wall absorbs both bounce and sideways speed so the ball does not orbit around it.
+      const bouncedN=vn>0?-vn*.42:vn;
+      const draggedT=vt*(ball.wallTouch>0?.48:.66);
+      ball.vx=bouncedN*nx+draggedT*tx;
+      ball.vy=bouncedN*ny+draggedT*ty;
+      ball.wallTouch=.16;
+    }
 
     checkRingGoal(-GOAL.y,'blue'); checkRingGoal(GOAL.y,'red');
-    for(const a of [player,enemy]) if(a.stun<=0&&ball.z<34&&dist(a,ball)<a.r+ball.r+7&&len(ball.vx,ball.vy)<430){ a.hasBall=true; ball.owner=a; ball.vx=ball.vy=ball.vz=0; break; }
+    const ballSpeed=len(ball.vx,ball.vy);
+    for(const a of [player,enemy]){
+      if(a.stun>0||ball.z>=38)continue;
+      const pickupRange=a.r+ball.r+(ballSpeed<220?24:13);
+      if(dist(a,ball)>=pickupRange)continue;
+      const toward=(ball.x-a.x)*a.vx+(ball.y-a.y)*a.vy;
+      if(ballSpeed<360 && (ballSpeed<210 || toward>0)){
+        a.hasBall=true; ball.owner=a; ball.vx=ball.vy=ball.vz=0; break;
+      }
+      // A fast loose ball is trapped and slowed on contact instead of sliding past the player.
+      const n=norm(ball.x-a.x,ball.y-a.y);
+      ball.x=a.x+n.x*pickupRange; ball.y=a.y+n.y*pickupRange;
+      ball.vx*=.38; ball.vy*=.38; ball.vz=Math.min(ball.vz,35);
+    }
   }
   function checkRingGoal(goalY,team){
     const crossed = goalY<0 ? (ball.prevY>goalY && ball.y<=goalY) : (ball.prevY<goalY && ball.y>=goalY);
@@ -119,7 +150,7 @@
   }
 
   function score(team){ if(!running)return; team==='blue'?blueScore++:redScore++; blueScoreEl.textContent=blueScore; redScoreEl.textContent=redScore; flash(team==='blue'?'RING GOAL!':'ENEMY GOAL'); resetPositions(); }
-  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0}); effects.length=0; shake=0; hitStop=0; }
+  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0}); effects.length=0; shake=0; hitStop=0; }
   function flash(text){ messageEl.textContent=text; messageEl.hidden=false; clearTimeout(flash.t); flash.t=setTimeout(()=>messageEl.hidden=true,850); }
 
   function update(dt){
