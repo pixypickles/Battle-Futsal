@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Combat Airball Prototype 2.7</title>
+<title>Combat Airball Prototype 2.8</title>
 <style>
   :root{
     --bg:#0d1326; --panel:#151e37; --ink:#f3f6ff; --muted:#a9b6d2;
@@ -13,7 +13,7 @@
   #wrap{height:100%;display:grid;place-items:center;padding:12px}
   #stage{position:relative;width:min(1280px,calc(100vw - 24px));aspect-ratio:16/9;border:2px solid #516184;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px #0008;background:#0b1020}
   canvas{width:100%;height:100%;display:block}
-  #hud{position:absolute;inset:0;pointer-events:none}
+  #hud{position:absolute;inset:0;pointer-events:none;z-index:5}
   #top{display:flex;justify-content:center;align-items:center;gap:18px;padding:14px;font-weight:900;text-shadow:0 2px 5px #000}
   .score{font-size:34px;min-width:50px;text-align:center}
   .blue{color:#7bdcff}.red{color:#ff8795}
@@ -21,7 +21,7 @@
   #help{position:absolute;left:16px;bottom:14px;font-size:13px;line-height:1.55;color:#dce7ff;background:#091022b8;border:1px solid #ffffff20;border-radius:12px;padding:10px 12px;backdrop-filter:blur(8px)}
   #notice{position:absolute;left:50%;top:23%;transform:translateX(-50%);font-weight:1000;font-size:clamp(28px,5vw,66px);letter-spacing:.05em;text-shadow:0 5px 0 #0008,0 0 22px currentColor;opacity:0;transition:opacity .12s}
   #badge{position:absolute;right:14px;bottom:14px;color:#c7d2ed;font-size:12px;background:#091022a8;padding:7px 10px;border-radius:10px;border:1px solid #ffffff1b}
-  #start{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(#07101bd4,#0a1024dc);pointer-events:auto}
+  #start{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(#07101bd4,#0a1024dc);pointer-events:auto;z-index:30}
   #card{width:min(690px,90%);padding:28px;border-radius:22px;background:#111a32e8;border:1px solid #ffffff2c;box-shadow:0 28px 90px #0009;text-align:center}
   h1{margin:0 0 8px;font-size:clamp(31px,5vw,58px);letter-spacing:.02em}
   .lead{color:#c1cdec;margin:0 auto 20px;max-width:560px;line-height:1.65}
@@ -29,6 +29,41 @@
   button:active{transform:translateY(5px);box-shadow:0 3px 0 #9c5e13}
   .small{font-size:12px;color:#91a0c0;margin-top:16px}
   @media(max-width:700px){#help{font-size:11px}.score{font-size:28px}}
+
+  #touchControls{position:absolute;inset:0;z-index:20;pointer-events:none;display:none}
+  .touchGroup{position:absolute;bottom:18px;display:flex;gap:12px;pointer-events:auto}
+  #moveControls{left:18px}
+  #actionControls{right:18px;align-items:flex-end}
+  .touchBtn{
+    width:76px;height:76px;padding:0;border-radius:50%;
+    display:grid;place-items:center;user-select:none;-webkit-user-select:none;
+    touch-action:none;font-size:28px;font-weight:1000;color:#fff;
+    background:linear-gradient(180deg,#33415fdd,#17223ddd);
+    border:2px solid #ffffff66;box-shadow:0 7px 0 #070b15aa,0 12px 28px #0008;
+  }
+  .touchBtn.action{width:82px;height:82px}
+  .touchBtn.staff{background:linear-gradient(180deg,#ffd76aee,#b96f18ee);color:#211300}
+  .touchBtn.kick{background:linear-gradient(180deg,#6ee8ffee,#16789aee);color:#04141b}
+  .touchBtn.jump{background:linear-gradient(180deg,#bd9bffee,#6947bfee)}
+  .touchBtn.active{transform:translateY(6px) scale(.96);box-shadow:0 2px 0 #070b15aa}
+  .touchLabel{font-size:12px;line-height:1.05;text-align:center}
+  .touchLabel b{display:block;font-size:26px}
+  @media (hover:none), (pointer:coarse), (max-width:900px){
+    #touchControls{display:block}
+    #help{display:none}
+    #badge{bottom:112px}
+    #top{padding-top:8px}
+    .score{font-size:28px}
+  }
+  @media(max-width:560px){
+    .touchBtn{width:64px;height:64px}
+    .touchBtn.action{width:70px;height:70px}
+    .touchGroup{gap:8px;bottom:10px}
+    #moveControls{left:10px}
+    #actionControls{right:10px}
+    #badge{display:none}
+  }
+
 </style>
 </head>
 <body>
@@ -44,13 +79,26 @@
         長棍：F　キック：G<br>
         <span style="color:#9fb0cf">空中F＝横シュート / 空中G＝蹴り上げ</span>
       </div>
-      <div id="badge">Combat Airball Prototype 2.7</div>
+      <div id="badge">Combat Airball Prototype 2.8</div>
+
+      <div id="touchControls" aria-label="タッチ操作">
+        <div class="touchGroup" id="moveControls">
+          <button class="touchBtn" data-key="KeyA" aria-label="左へ移動">◀</button>
+          <button class="touchBtn" data-key="KeyD" aria-label="右へ移動">▶</button>
+        </div>
+        <div class="touchGroup" id="actionControls">
+          <button class="touchBtn action jump" data-key="KeyW" aria-label="ジャンプ"><span class="touchLabel"><b>↑</b>ジャンプ</span></button>
+          <button class="touchBtn action staff" data-key="KeyF" aria-label="長棍"><span class="touchLabel"><b>F</b>長棍</span></button>
+          <button class="touchBtn action kick" data-key="KeyG" aria-label="キック"><span class="touchLabel"><b>G</b>キック</span></button>
+        </div>
+      </div>
+
       <div id="start">
         <div id="card">
           <h1>COMBAT AIRBALL</h1>
           <p class="lead">ボールを蹴り上げ、全員で空へ。長棍の横突きで相手ごと吹き飛ばし、左右のゴールへ叩き込め。</p>
           <button id="play">試合開始</button>
-          <div class="small">青1体を操作。残り3体はAIです。Enterでも開始できます。</div>
+          <div class="small">青1体を操作。残り3体はAIです。ボタン・Enter・Space・画面タップで開始できます。</div>
         </div>
       </div>
     </div>
@@ -292,14 +340,45 @@ addEventListener('keydown',e=>{
   if(['KeyA','KeyD','KeyW','KeyF','KeyG','Enter','Space'].includes(e.code)) e.preventDefault();
   if(!keys.has(e.code)) pressQueue.add(e.code);
   keys.add(e.code);
-  if(e.code==='Enter'&&!running) startGame();
+  if((e.code==='Enter'||e.code==='Space')&&!running) startGame();
 });
 addEventListener('keyup',e=>keys.delete(e.code));
 function pressed(code){if(pressQueue.has(code)){pressQueue.delete(code);return true}return false}
 document.getElementById('play').onclick=startGame;
 
+// Touch / pointer controls
+document.querySelectorAll('.touchBtn').forEach(btn=>{
+  const code=btn.dataset.key;
+  const down=(e)=>{
+    e.preventDefault();
+    if(!keys.has(code)) pressQueue.add(code);
+    keys.add(code);
+    btn.classList.add('active');
+    try{btn.setPointerCapture(e.pointerId)}catch(_){}
+  };
+  const up=(e)=>{
+    e.preventDefault();
+    keys.delete(code);
+    btn.classList.remove('active');
+  };
+  btn.addEventListener('pointerdown',down);
+  btn.addEventListener('pointerup',up);
+  btn.addEventListener('pointercancel',up);
+  btn.addEventListener('lostpointercapture',up);
+  btn.addEventListener('contextmenu',e=>e.preventDefault());
+});
+ui.start.addEventListener('pointerdown',e=>{
+  if(e.target.id!=='play' && !running) startGame();
+});
+
+
 function startGame(){
-  running=true; gameTime=90;scores=[0,0];ui.start.style.display='none';resetPositions();showNotice('AIRBALL!', '#fff4a6');
+  document.querySelector('#card h1').textContent='COMBAT AIRBALL';
+  document.querySelector('#card .lead').textContent='ボールを蹴り上げ、全員で空へ。長棍の横突きで相手ごと吹き飛ばし、左右のゴールへ叩き込め。';
+  document.getElementById('play').textContent='試合開始';
+  running=true; gameTime=90;scores=[0,0];
+  ui.blue.textContent='0'; ui.red.textContent='0';
+  ui.start.style.display='none';resetPositions();showNotice('AIRBALL!', '#fff4a6');
 }
 function resetPositions(){
   const xs=[300,455,825,980];
