@@ -43,3 +43,11 @@ canvas { aspect-ratio: 2 / 3; object-fit: contain; }
 @media (min-width: 850px) {
   .app { width: 780px; }
 }
+
+.pad{display:grid;grid-template-columns:repeat(3,82px);gap:10px;align-items:center}
+.pad button{width:82px;height:82px}
+.pad .down{background:#354857}
+@media(max-width:700px){
+  .pad{grid-template-columns:repeat(3,62px);gap:5px}
+  .pad button{width:62px;height:62px;font-size:26px}
+}

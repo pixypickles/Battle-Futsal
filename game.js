@@ -17,7 +17,7 @@ const W = canvas.width, H = canvas.height;
 
 const arena = {
   left: 52, right: W - 52, top: 34, floor: H - 48,
-  goalY: 350, goalR: 44
+  goalY: 455, goalR: 44
 };
 
 const keys = new Set();
@@ -69,7 +69,7 @@ class Player {
     this.onGround=true; this.wall=0; this.wallTimer=0;
     this.jumpBuffer=0; this.kickTimer=0; this.attackTimer=0;
     this.airJumpAvailable=true;
-    this.stun=0; this.hitFlash=0; this.anim=0; this.pose="idle";
+    this.stun=0; this.hitFlash=0; this.anim=0; this.pose="idle"; this.downHeld=false; this.attackType="thrust";
   }
   update() {
     if(this.stun>0){this.stun--; this.vx*=.96;} if(this.hitFlash>0)this.hitFlash--;
@@ -80,6 +80,7 @@ class Player {
     let move=0, jump=false, kick=false, attack=false;
     if(!this.ai){
       move=(keys.has("ArrowRight")||keys.has("KeyD")?1:0)-(keys.has("ArrowLeft")||keys.has("KeyA")?1:0);
+      this.downHeld=keys.has("ArrowDown")||keys.has("KeyS");
       jump=pressed.has("KeyL")||pressed.has("Space");
       kick=(!this.onGround && keys.has("KeyK")) || pressed.has("KeyK");
       attack=(!this.onGround && keys.has("KeyJ")) || pressed.has("KeyJ");
@@ -90,7 +91,11 @@ class Player {
       const threat = Math.abs(ball.x-this.x)<170 && ball.y<this.y-35;
       jump=(this.onGround && (threat || Math.random()<.008)) || (this.wall && Math.random()<.04);
       kick=Math.abs(ball.x-this.x)<112 && Math.abs(ball.y-this.y)<105 && Math.random()<.22;
-      attack=this.y<arena.floor-45 && nearestOpponent(this)<120 && Math.random()<.11;
+      {
+        const opp=nearestOpponentObj(this);
+        this.downHeld=!!opp && !this.onGround && opp.y>this.y+24 && Math.abs(opp.x-this.x)<105;
+        attack=this.y<arena.floor-45 && nearestOpponent(this)<135 && Math.random()<.13;
+      }
     }
 
     if(jump)this.jumpBuffer=20;
@@ -145,13 +150,25 @@ class Player {
 
     this.wall=0;
     if(this.x-this.r<arena.left){
+      const impact=Math.abs(this.vx);
       this.x=arena.left+this.r;
-      if(!this.onGround){this.wall=-1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
-      this.vx=Math.max(0,this.vx);
+      if(impact>9){
+        this.vx=5.8;this.vy-=2.3;this.stun=Math.max(this.stun,25);this.hitFlash=10;
+        hitBursts.push({x:this.x,y:this.y,life:18,color:"#ffffff"});
+      }else{
+        if(!this.onGround){this.wall=-1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
+        this.vx=Math.max(0,this.vx);
+      }
     } else if(this.x+this.r>arena.right){
+      const impact=Math.abs(this.vx);
       this.x=arena.right-this.r;
-      if(!this.onGround){this.wall=1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
-      this.vx=Math.min(0,this.vx);
+      if(impact>9){
+        this.vx=-5.8;this.vy-=2.3;this.stun=Math.max(this.stun,25);this.hitFlash=10;
+        hitBursts.push({x:this.x,y:this.y,life:18,color:"#ffffff"});
+      }else{
+        if(!this.onGround){this.wall=1;this.wallTimer=Math.min(24,this.wallTimer+1);this.vy*=.93;}
+        this.vx=Math.min(0,this.vx);
+      }
     }
 
     if(this.anim>0)this.anim--; else this.pose=this.onGround?(Math.abs(this.vx)>1?"run":"idle"):"jump";
@@ -208,15 +225,16 @@ function poseFor(p){
     }
   } else if(p.pose==="attack"){
     const k=easeOut(clamp(t,0,1));
-    if(p.kind==="sword"){
-      pose.bodyRot=.22*k;
-      pose.armF1=lerp(-.4,1.15,k); pose.armF2=lerp(.1,1.45,k);
-      pose.armB1=lerp(-2.7,1.75,k); pose.armB2=lerp(-2.95,1.48,k);
-      pose.legF1=1.2; pose.legF2=1.45; pose.legB1=1.95; pose.legB2=1.55;
+    if(p.attackType==="down"){
+      pose.bodyRot=.32*k;
+      pose.armF1=lerp(-1.05,1.35,k);pose.armF2=lerp(-.75,1.48,k);
+      pose.armB1=lerp(-2.1,1.78,k);pose.armB2=lerp(-2.35,1.48,k);
+      pose.legF1=.95;pose.legF2=1.55;pose.legB1=2.15;pose.legB2=1.35;
     }else{
-      pose.bodyRot=-.25*k;
-      pose.armF1=lerp(-.35,-.03,k); pose.armF2=lerp(.1,-.02,k);
-      pose.armB1=-2.5; pose.armB2=-2.9;
+      pose.bodyRot=-.20*k;
+      pose.armF1=lerp(-1.2,-.02,k);pose.armF2=lerp(-.8,-.02,k);
+      pose.armB1=lerp(-2.0,-.12,k);pose.armB2=lerp(-2.35,-.04,k);
+      pose.legF1=1.18;pose.legF2=1.48;pose.legB1=1.95;pose.legB2=1.55;
     }
   } else if(p.stun>0){
     pose.bodyRot=.55;
@@ -270,7 +288,7 @@ function drawCharacter(p){
 
   // torso
   ctx.fillStyle=teamColor;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.roundRect(-18,-29,36,44,12);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.roundRect(-16,-27,32,40,8);ctx.fill();ctx.stroke();
 
   // belt
   ctx.fillStyle=dark;ctx.fillRect(-17,5,34,7);
@@ -282,13 +300,13 @@ function drawCharacter(p){
 
   // head
   ctx.fillStyle=skin;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.arc(0,-44,20,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(0,-41,16,0,Math.PI*2);ctx.fill();ctx.stroke();
 
   // hair / hood
-  ctx.fillStyle=p.kind==="ninja"?"#11232f":"#2b1b17";
-  ctx.beginPath();ctx.arc(0,-49,20,Math.PI,Math.PI*2);ctx.lineTo(18,-40);
+  ctx.fillStyle=p.kind==="staff"?"#11232f":"#2b1b17";
+  ctx.beginPath();ctx.arc(0,-45,16,Math.PI,Math.PI*2);ctx.lineTo(15,-38);
   ctx.quadraticCurveTo(4,-30,-15,-37);ctx.closePath();ctx.fill();
-  if(p.kind==="ninja"){
+  if(p.kind==="staff"){
     ctx.fillStyle=teamColor;ctx.fillRect(-13,-45,26,5);
     ctx.fillStyle="#eafaff";ctx.fillRect(-9,-42,18,3);
   }else{
@@ -296,24 +314,21 @@ function drawCharacter(p){
   }
 
   // eyes
-  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(6,-44,3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(5,-40,2,0,Math.PI*2);ctx.fill();
 
-  // weapon
-  if(p.kind==="sword"){
-    const hx=frontHand.x, hy=frontHand.y;
-    ctx.save();
-    ctx.translate(hx,hy);
-    ctx.rotate(p.pose==="attack"?1.05:-0.35);
-    ctx.fillStyle="#394856";ctx.fillRect(-6,-4,13,8);
-    ctx.fillStyle="#dfe9ef";
-    ctx.beginPath();ctx.moveTo(5,-5);ctx.lineTo(46,0);ctx.lineTo(5,5);ctx.closePath();ctx.fill();
-    ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.stroke();
-    ctx.restore();
+  // weapon — 全員が長棍を両手で持つ
+  ctx.save();
+  ctx.strokeStyle="#c98a32";ctx.lineWidth=7;ctx.lineCap="round";
+  if(p.pose==="attack" && p.attackType==="down"){
+    const cx=(backHand.x+frontHand.x)/2, cy=(backHand.y+frontHand.y)/2;
+    ctx.beginPath();ctx.moveTo(cx-2,cy-42);ctx.lineTo(cx+7,cy+76);ctx.stroke();
+  }else if(p.pose==="attack"){
+    const cy=(backHand.y+frontHand.y)/2;
+    ctx.beginPath();ctx.moveTo(-45,cy);ctx.lineTo(78,cy);ctx.stroke();
   }else{
-    ctx.fillStyle="#dfe8ed";ctx.beginPath();
-    const hx=frontHand.x, hy=frontHand.y;
-    ctx.moveTo(hx,hy);ctx.lineTo(hx+15,hy-3);ctx.lineTo(hx+7,hy+8);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(-48,-5);ctx.lineTo(49,-20);ctx.stroke();
   }
+  ctx.restore();
 
   if(p.stun>0){
     ctx.strokeStyle="#ffd94a";ctx.lineWidth=3;
@@ -360,10 +375,10 @@ class Ball {
 
 let blueScore=0, redScore=0;
 const players=[
-  new Player("blue","ninja",155,false),
-  new Player("blue","sword",270,true),
-  new Player("red","sword",450,true),
-  new Player("red","ninja",565,true)
+  new Player("blue","staff",155,false),
+  new Player("blue","staff",270,true),
+  new Player("red","staff",450,true),
+  new Player("red","staff",565,true)
 ];
 const ball=new Ball();
 
@@ -371,6 +386,14 @@ function nearestOpponent(p){
   let best=null,bd=1e9;
   for(const q of players) if(q.team!==p.team){
     const d=len(q.x-p.x,q.y-p.y);if(d<bd){bd=d;best=q;}
+  }
+  return best;
+}
+function nearestOpponentObj(p){
+  let best=null,bd=1e9;
+  for(const q of players) if(q.team!==p.team){
+    const d=len(q.x-p.x,q.y-p.y);
+    if(d<bd){bd=d;best=q;}
   }
   return best;
 }
@@ -414,31 +437,42 @@ function kickBall(p){
   }
 }
 function weaponAttack(p){
-  if(p.kind==="ninja"){
-    projectiles.push({x:p.x+p.facing*28,y:p.y-12,vx:p.facing*10.5,life:65,team:p.team});
-  }else{
-    // 片手剣：斜め下へ振り下ろし、相手を落とす。
-    const slashX=p.x+p.facing*46;
-    const slashY=p.y+10;
+  const downSmash=!p.onGround && p.downHeld;
+  if(downSmash){
+    p.attackType="down";
+    staffTrails.push({x:p.x,y:p.y+8,dir:p.facing,type:"down",life:13});
     for(const q of players){
       if(q.team===p.team)continue;
-      const dx=q.x-slashX,dy=q.y-slashY;
-      if(len(dx,dy)<112 && (q.x-p.x)*p.facing>-28){
-        q.vy=Math.max(q.vy,10.6);
-        q.vx+=p.facing*3.2;
-        q.stun=12;q.hitFlash=7;
-        hitBursts.push({x:q.x,y:q.y,life:14,color:"#ffd46a"});
-        p.vy-=0.7;
+      const dx=q.x-p.x,dy=q.y-(p.y+58);
+      if(Math.abs(dx)<94 && dy>-38 && dy<148){
+        q.vy=18.5;
+        q.vx*=0.18;
+        q.stun=20;q.hitFlash=9;q.pose="hurt";q.anim=18;
+        hitBursts.push({x:q.x,y:q.y,life:17,color:"#ffb347"});
+        p.vy-=1.3;
       }
     }
-    swordSlashes.push({x:slashX,y:slashY,dir:p.facing,life:9});
+  }else{
+    p.attackType="thrust";
+    const hitX=p.x+p.facing*76, hitY=p.y-8;
+    staffTrails.push({x:p.x+p.facing*26,y:p.y-8,dir:p.facing,type:"thrust",life:11});
+    for(const q of players){
+      if(q.team===p.team)continue;
+      const dx=q.x-hitX,dy=q.y-hitY;
+      if(Math.abs(dx)<116 && Math.abs(dy)<66 && (q.x-p.x)*p.facing>-30){
+        q.vx=p.facing*15.5;
+        q.vy*=0.25;
+        q.stun=16;q.hitFlash=9;q.pose="hurt";q.anim=16;
+        hitBursts.push({x:q.x,y:q.y,life:16,color:"#fff08a"});
+      }
+    }
   }
 }
 const projectiles=[];
 const hitBursts=[];
-const swordSlashes=[];
+const staffTrails=[];
 function updateProjectiles(){
-  for(let i=hitBursts.length-1;i>=0;i--){hitBursts[i].life--;if(hitBursts[i].life<=0)hitBursts.splice(i,1);} for(let i=swordSlashes.length-1;i>=0;i--){swordSlashes[i].life--;if(swordSlashes[i].life<=0)swordSlashes.splice(i,1);}
+  for(let i=hitBursts.length-1;i>=0;i--){hitBursts[i].life--;if(hitBursts[i].life<=0)hitBursts.splice(i,1);} for(let i=staffTrails.length-1;i>=0;i--){staffTrails[i].life--;if(staffTrails[i].life<=0)staffTrails.splice(i,1);}
   for(let i=projectiles.length-1;i>=0;i--){
     const k=projectiles[i];k.x+=k.vx;k.life--;
     for(const p of players){
@@ -474,7 +508,7 @@ function score(team){
   statusEl.textContent=(team==="blue"?"BLUE":"RED")+" GOAL!";
   ball.reset();
   players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});
-  setTimeout(()=>statusEl.textContent="地上キックで高く浮かせ、空中で連続攻撃できます",700);
+  setTimeout(()=>statusEl.textContent="J: 横突き　空中で↓＋J: 真下への振り下ろし",700);
 }
 
 function drawArena(){
@@ -522,12 +556,22 @@ function drawProjectiles(){
     const r=(15-h.life)*3+5;
     ctx.beginPath();ctx.arc(h.x,h.y,r,0,Math.PI*2);ctx.stroke();ctx.restore();
   });
-  swordSlashes.forEach(s=>{
-    ctx.save();ctx.globalAlpha=s.life/9;ctx.strokeStyle="#fff3a8";ctx.lineWidth=7;ctx.lineCap="round";
-    ctx.beginPath();
-    if(s.dir>0)ctx.arc(s.x-18,s.y-18,45,-1.1,0.9);
-    else ctx.arc(s.x+18,s.y-18,45,Math.PI-0.9,Math.PI+1.1);
-    ctx.stroke();ctx.restore();
+  staffTrails.forEach(s=>{
+    ctx.save();ctx.lineCap="round";
+    if(s.type==="down"){
+      for(let i=0;i<3;i++){
+        ctx.globalAlpha=(s.life/13)*(1-i*.25);ctx.strokeStyle="#ffb347";ctx.lineWidth=12-i*2;
+        ctx.beginPath();ctx.moveTo(s.x-36+i*12,s.y-88+i*10);
+        ctx.quadraticCurveTo(s.x+8,s.y-12,s.x+20+i*7,s.y+112);ctx.stroke();
+      }
+    }else{
+      for(let i=0;i<3;i++){
+        ctx.globalAlpha=(s.life/11)*(1-i*.25);ctx.strokeStyle="#fff08a";ctx.lineWidth=11-i*2;
+        ctx.beginPath();ctx.moveTo(s.x-s.dir*(24+i*10),s.y-10+i*5);
+        ctx.lineTo(s.x+s.dir*(112-i*8),s.y-10+i*5);ctx.stroke();
+      }
+    }
+    ctx.restore();
   });
 }
 
