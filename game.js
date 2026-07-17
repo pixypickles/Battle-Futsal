@@ -13,12 +13,13 @@
   const GOAL = { y: 286, radius: 43, height: 158 };
   const GRAVITY = 850;
   const effects = [];
+  const projectiles = [];
   const CLASS_ORDER = ['knight','mace','monk','ninja'];
   const CLASS_DATA = {
-    knight:{label:'KNIGHT',speed:225},
-    mace:{label:'MACE',speed:194},
-    monk:{label:'MONK',speed:218},
-    ninja:{label:'NINJA',speed:248}
+    knight:{label:'KNIGHT',speed:180,knockback:0.80},
+    mace:{label:'MACE',speed:150,knockback:0.60},
+    monk:{label:'MONK',speed:225,knockback:1.00},
+    ninja:{label:'NINJA',speed:248,knockback:1.20}
   };
   let selectedClass = 'knight';
   const trails = [];
@@ -40,7 +41,7 @@
 
   class Actor {
     constructor(x,y,team,isPlayer=false,role='striker',classType='knight'){
-      Object.assign(this,{x,y,team,isPlayer,role,classType,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,attackAnim:0,dashCool:0});
+      Object.assign(this,{x,y,team,isPlayer,role,classType,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,attackAnim:0,attackKind:'',dashCool:0,wallStun:0});
       this.speed = CLASS_DATA[classType].speed + (isPlayer?0:(role==='support'?-12:-7));
       this.facing = team==='blue' ? -Math.PI/2 : Math.PI/2;
       this.aiThink = Math.random()*.15;
@@ -51,6 +52,7 @@
       this.coolB=Math.max(0,this.coolB-dt);
       this.attackAnim=Math.max(0,this.attackAnim-dt);
       this.dashCool=Math.max(0,this.dashCool-dt);
+      this.wallStun=Math.max(0,this.wallStun-dt);
       this.guard=false;
       if(this.stun>0){
         this.holdB=false; this.chargeB=0;
@@ -209,31 +211,23 @@
     }
     slash(){
       if(this.coolA>0||this.stun>0)return;
-      this.attackAnim=.30;
-      if(this.classType==='mace'){ this.coolA=.82; strike(this,100,.58,560,'MACE'); pokeBall(this,360); }
-      else if(this.classType==='monk'){ this.coolA=.54; strike(this,132,.72,250,'SWEEP'); pokeBall(this,285); }
-      else if(this.classType==='ninja'){ this.coolA=.30; this.attackAnim=.20; strike(this,82,.46,175,'CUT'); pokeBall(this,170); }
-      else { this.coolA=.56; strike(this,96,1.12,165,'SLASH'); pokeBall(this,195); }
+      this.attackAnim=.30; this.attackKind='A';
+      if(this.classType==='mace'){ this.attackAnim=.42; this.coolA=.88; strike(this,112,.42,650,'MACE SWEEP'); pokeBall(this,430); }
+      else if(this.classType==='monk'){ this.coolA=.54; strike(this,132,.62,245,'LEG SWEEP'); pokeBall(this,285); }
+      else if(this.classType==='ninja'){ this.coolA=.30; this.attackAnim=.20; strike(this,82,.34,155,'CUT'); pokeBall(this,170); }
+      else { this.coolA=.56; strike(this,96,1.12,155,'SLASH'); pokeBall(this,195); }
     }
     bash(){
       if(this.coolB>0||this.stun>0)return;
-      if(this.classType==='mace'){ this.coolB=1.32; this.vx+=Math.cos(this.facing)*250; this.vy+=Math.sin(this.facing)*250; strike(this,92,.28,920,'CRUSH'); pokeBall(this,430); }
-      else if(this.classType==='monk'){ this.coolB=.90; this.vx+=Math.cos(this.facing)*300; this.vy+=Math.sin(this.facing)*300; strike(this,108,.38,460,'THRUST'); pokeBall(this,330); }
+      this.attackKind='B';
+      if(this.classType==='mace'){ this.attackAnim=.58; this.coolB=1.55; this.vx+=Math.cos(this.facing)*105; this.vy+=Math.sin(this.facing)*105; strike(this,104,.30,1320,'MACE CRUSH'); pokeBall(this,690); }
+      else if(this.classType==='monk'){ this.attackAnim=.34; this.coolB=.90; this.vx+=Math.cos(this.facing)*210; this.vy+=Math.sin(this.facing)*210; strike(this,154,.30,520,'THRUST'); pokeBall(this,360); }
       else if(this.classType==='ninja'){ this.shuriken(); }
-      else { this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.34,720,'BASH'); pokeBall(this,280); }
+      else { this.attackAnim=.30; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.34,720,'BASH'); pokeBall(this,280); }
     }
     shuriken(){
-      this.coolB=.78;
-      const foes=actors.filter(a=>a.team!==this.team&&a.stun<=0);
-      let target=null,best=195;
-      for(const f of foes){
-        const d=dist(this,f),ang=Math.abs(angleDiff(Math.atan2(f.y-this.y,f.x-this.x),this.facing));
-        if(d<best&&ang<.55){best=d;target=f;}
-      }
-      if(target){
-        const n=norm(target.x-this.x,target.y-this.y); target.stun=Math.max(target.stun,.42); target.vx=n.x*210; target.vy=n.y*210;
-        if(target.hasBall)dropBall(target,185); effects.push({x:target.x,y:target.y,z:38,t:.28,label:'SHURIKEN'});
-      } else effects.push({x:this.x+Math.cos(this.facing)*90,y:this.y+Math.sin(this.facing)*90,z:32,t:.18,label:'MISS'});
+      this.coolB=1.25; this.attackAnim=.22; this.attackKind='B';
+      projectiles.push({x:this.x+Math.cos(this.facing)*34,y:this.y+Math.sin(this.facing)*34,z:34,vx:Math.cos(this.facing)*520,vy:Math.sin(this.facing)*520,team:this.team,t:.62,rot:0});
     }
     mobilitySkill(){
       if(this.dashCool>0)return;
@@ -312,12 +306,15 @@
     target.stun=Math.max(target.stun,stun);
     target.holdB=false; target.chargeB=0;
     const n=norm(dx,dy);
-    target.vx=n.x*force; target.vy=n.y*force;
+    const resistance=CLASS_DATA[target.classType].knockback||1;
+    target.vx=n.x*force*resistance; target.vy=n.y*force*resistance;
+    if(label==='MACE CRUSH')target.wallStun=.75;
     target.x+=n.x*12; target.y+=n.y*12;
     if(target.hasBall)dropBall(target,force*.95);
     effects.push({x:target.x,y:target.y,z:38,t:.28,label});
-    shake=Math.max(shake,label==='BASH'?18:8);
-    hitStop=Math.max(hitStop,label==='BASH'?.080:.065);
+    const heavy=label==='MACE CRUSH';
+    shake=Math.max(shake,heavy?24:label==='BASH'?18:8);
+    hitStop=Math.max(hitStop,heavy?.115:label==='BASH'?.080:.065);
   }
   function pokeBall(actor,speed){
     if(ball.owner||ball.z>24||dist(actor,ball)>82)return;
@@ -341,7 +338,9 @@
   function releaseShot(actor,charge=0,direct=false){
     const goalY=actor.team==='blue'?-GOAL.y:GOAL.y;
     const desired=Math.atan2(goalY-actor.y,-actor.x);
-    const launchAssist=direct?.50:(.08+charge*.20);
+    const distanceToGoal=Math.hypot(-actor.x,goalY-actor.y);
+    const distanceAssist=clamp(1-(distanceToGoal-165)/330,.18,1);
+    const launchAssist=direct?.50:(.05+charge*.24*distanceAssist);
     let shotAngle=actor.facing+angleDiff(desired,actor.facing)*launchAssist;
     if(!actor.isPlayer)shotAngle+=(Math.random()-.5)*(.10*(1-charge));
 
@@ -363,7 +362,7 @@
     actor.hasBall=false; ball.owner=null;
     ball.x=startX; ball.y=startY; ball.z=startZ;
     ball.vx=vx; ball.vy=vy; ball.vz=clamp(vz,390,555);
-    ball.shotAssist=direct?.55:charge;
+    ball.shotAssist=direct?.55:charge*distanceAssist;
     ball.targetY=goalY;
     ball.shotTime=1.6;
     ball.shotOriginY=startY;
@@ -375,7 +374,28 @@
 
   function constrainActor(a){
     const d=Math.hypot(a.x,a.y), max=FIELD.r-a.r;
-    if(d>max){ a.x=a.x/d*max; a.y=a.y/d*max; a.vx*=.25; a.vy*=.25; }
+    if(d>max){
+      const impact=Math.hypot(a.vx,a.vy);
+      a.x=a.x/d*max; a.y=a.y/d*max; a.vx*=.18; a.vy*=.18;
+      if(a.wallStun>0&&impact>420){ a.stun=Math.max(a.stun,.55); a.wallStun=0; effects.push({x:a.x,y:a.y,z:42,t:.34,label:'WALL!'}); shake=Math.max(shake,18); }
+    }
+  }
+
+  function updateProjectiles(dt){
+    for(let i=projectiles.length-1;i>=0;i--){
+      const q=projectiles[i]; q.t-=dt; q.rot+=dt*24; q.x+=q.vx*dt; q.y+=q.vy*dt;
+      let hit=false;
+      for(const a of actors){
+        if(a.team===q.team||a.stun>0)continue;
+        if(Math.hypot(a.x-q.x,a.y-q.y)<a.r+18){
+          const n=norm(q.vx,q.vy), resistance=CLASS_DATA[a.classType].knockback||1;
+          a.stun=Math.max(a.stun,.44); a.vx=n.x*235*resistance; a.vy=n.y*235*resistance;
+          if(a.hasBall)dropBall(a,205);
+          effects.push({x:a.x,y:a.y,z:40,t:.30,label:'SHURIKEN'}); shake=Math.max(shake,7); hit=true; break;
+        }
+      }
+      if(Math.hypot(q.x,q.y)>FIELD.r-8||q.t<=0||hit)projectiles.splice(i,1);
+    }
   }
 
   function updateBall(dt){
@@ -470,7 +490,7 @@
     const starts=[[-72,175],[78,148],[-72,-170],[82,-145]];
     actors.forEach((a,i)=>Object.assign(a,{x:starts[i][0],y:starts[i][1],vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,facing:a.team==='blue'?-Math.PI/2:Math.PI/2}));
     Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0,shotTime:0,goalEligible:false,shotOriginY:0});
-    effects.length=0; trails.length=0; shake=0; hitStop=0;
+    effects.length=0; trails.length=0; projectiles.length=0; shake=0; hitStop=0;
   }
   function flash(text){
     messageEl.textContent=text; messageEl.hidden=false;
@@ -491,7 +511,7 @@
     gameTime=Math.max(0,gameTime-dt);
     if(gameTime<=0){running=false;flash(blueScore===redScore?'DRAW':blueScore>redScore?'YOU WIN':'YOU LOSE');}
     actors.forEach(a=>a.update(dt));
-    updateBall(dt); updateEffects(dt); resolveActorCollisions();
+    updateProjectiles(dt); updateBall(dt); updateEffects(dt); resolveActorCollisions();
     const sec=Math.ceil(gameTime);
     timerEl.textContent=`${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
   }
@@ -508,7 +528,7 @@
     ctx.clearRect(-30,-30,W+60,H+60);
     const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#182a34'); g.addColorStop(1,'#0b1218');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    drawArena(); drawTrails();
+    drawArena(); drawTrails(); drawProjectiles();
     const items=[
       {y:-GOAL.y-2,fn:()=>drawGoal(-GOAL.y,'red')},
       ...actors.map(a=>({y:a.y,fn:()=>drawActor(a)})),
@@ -561,15 +581,19 @@
     // Each class has a distinct silhouette and attack animation.
     ctx.save();
     ctx.translate(18,-22);
-    const progress=a.attackAnim>0?1-a.attackAnim/.30:0;
-    const swing=-1.18+(1-Math.pow(1-clamp(progress,0,1),2))*2.38;
+    const duration=a.classType==='mace'&&a.attackKind==='B'?.58:a.classType==='mace'?.42:a.attackKind==='B'?.34:.30;
+    const progress=a.attackAnim>0?1-a.attackAnim/duration:0;
+    let swing=-1.18+(1-Math.pow(1-clamp(progress,0,1),2))*2.38;
+    if(a.classType==='monk'&&a.attackKind==='B')swing=0;
+    if(a.classType==='mace'&&a.attackKind==='B')swing=-Math.PI+(clamp(progress,0,1))*Math.PI;
     const weaponAngle=a.attackAnim>0?swing:.16;
     ctx.rotate(weaponAngle);
     if(a.classType==='mace'){
-      ctx.fillStyle='#6f4528';ctx.fillRect(-5,-6,10,58);ctx.strokeRect(-5,-6,10,58);
-      ctx.fillStyle='#9ba8ad';ctx.beginPath();ctx.arc(0,-12,18,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#6f4528';ctx.fillRect(-5,-62,10,64);ctx.strokeRect(-5,-62,10,64);
+      ctx.fillStyle='#9ba8ad';ctx.beginPath();ctx.arc(0,-69,19,0,Math.PI*2);ctx.fill();ctx.stroke();
     } else if(a.classType==='monk'){
-      ctx.fillStyle='#cfab69';ctx.fillRect(-5,-64,10,116);ctx.strokeRect(-5,-64,10,116);
+      if(a.attackKind==='B'&&a.attackAnim>0){ const thrust=clamp(progress,0,1); ctx.translate(0,-38* Math.sin(thrust*Math.PI)); }
+      ctx.fillStyle='#cfab69';ctx.fillRect(-5,-70,10,128);ctx.strokeRect(-5,-70,10,128);
     } else if(a.classType==='ninja'){
       ctx.fillStyle='#d9e2e6';ctx.beginPath();ctx.moveTo(-7,-38);ctx.lineTo(7,-38);ctx.lineTo(4,12);ctx.lineTo(-4,12);ctx.closePath();ctx.fill();ctx.stroke();
     } else {
@@ -577,7 +601,7 @@
       ctx.fillStyle='#ead8a7';ctx.beginPath();ctx.roundRect(-7,-52,14,52,5);ctx.fill();ctx.stroke();
       ctx.fillStyle='#d6a54d';ctx.fillRect(-13,-5,26,7);ctx.strokeRect(-13,-5,26,7);
     }
-    if(a.attackAnim>0){ctx.globalAlpha=.34*(1-progress);ctx.strokeStyle='#fff3b0';ctx.lineWidth=a.classType==='monk'?8:12;ctx.beginPath();ctx.arc(0,1,a.classType==='monk'?76:58,-1.18,swing);ctx.stroke();}
+    if(a.attackAnim>0){ctx.globalAlpha=.34*(1-progress);ctx.strokeStyle='#fff3b0';ctx.lineWidth=a.classType==='monk'?8:12;if(a.attackKind==='B'&&a.classType==='monk'){ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(0,-112);ctx.stroke();}else{ctx.beginPath();ctx.arc(0,1,a.classType==='monk'?76:a.classType==='mace'?78:58,-1.18,swing);ctx.stroke();}}
     ctx.restore();
     if(a.classType==='knight'||a.classType==='mace'){ctx.fillStyle='#aab9c0';ctx.beginPath();ctx.roundRect(-34,-28,17,36,6);ctx.fill();ctx.stroke();}
     ctx.save();ctx.rotate(-(a.facing+Math.PI/2));ctx.font='800 10px system-ui';ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.8)';ctx.fillText(CLASS_DATA[a.classType].label,0,24);ctx.restore();
@@ -597,6 +621,18 @@
     for(const t of trails){
       const p=project(t.x,t.y,t.z);
       ctx.save();ctx.globalAlpha=clamp(t.t/.22,0,.42);ctx.fillStyle='#fff3a5';ctx.beginPath();ctx.arc(p.x,p.y,6*p.s,0,Math.PI*2);ctx.fill();ctx.restore();
+    }
+  }
+
+  function drawProjectiles(){
+    for(const q of projectiles){
+      const tail=project(q.x-q.vx*.055,q.y-q.vy*.055,q.z), p=project(q.x,q.y,q.z);
+      ctx.save(); ctx.globalAlpha=clamp(q.t/.18,0,1); ctx.strokeStyle='rgba(255,255,255,.78)'; ctx.lineWidth=7; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(tail.x,tail.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+      ctx.translate(p.x,p.y); ctx.rotate(q.rot); ctx.fillStyle='#edf7ff'; ctx.strokeStyle='#18242b'; ctx.lineWidth=3;
+      ctx.beginPath();
+      for(let i=0;i<8;i++){ const a=i*Math.PI/4, r=i%2===0?20:7; const x=Math.cos(a)*r,y=Math.sin(a)*r; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+      ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
     }
   }
 
