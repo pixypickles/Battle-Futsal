@@ -51,7 +51,7 @@ const redScoreEl = document.getElementById("redScore");
 const statusEl = document.getElementById("status");
 
 const GRAVITY = 0.31;
-const BALL_GRAVITY = 0.12;
+const BALL_GRAVITY = 0.10;
 const FLOOR_BOUNCE = 0.36;
 const MAX_BALL_SPEED = 9.2;
 const KICK_COOLDOWN = 12;
@@ -208,7 +208,7 @@ function poseFor(p){
     }
   } else if(p.pose==="attack"){
     const k=easeOut(clamp(t,0,1));
-    if(p.kind==="staff"){
+    if(p.kind==="sword"){
       pose.bodyRot=.22*k;
       pose.armF1=lerp(-.4,1.15,k); pose.armF2=lerp(.1,1.45,k);
       pose.armB1=lerp(-2.7,1.75,k); pose.armB2=lerp(-2.95,1.48,k);
@@ -270,7 +270,7 @@ function drawCharacter(p){
 
   // torso
   ctx.fillStyle=teamColor;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.roundRect(-16,-27,32,40,8);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.roundRect(-18,-29,36,44,12);ctx.fill();ctx.stroke();
 
   // belt
   ctx.fillStyle=dark;ctx.fillRect(-17,5,34,7);
@@ -282,11 +282,11 @@ function drawCharacter(p){
 
   // head
   ctx.fillStyle=skin;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
-  ctx.beginPath();ctx.arc(0,-41,16,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(0,-44,20,0,Math.PI*2);ctx.fill();ctx.stroke();
 
   // hair / hood
   ctx.fillStyle=p.kind==="ninja"?"#11232f":"#2b1b17";
-  ctx.beginPath();ctx.arc(0,-45,16,Math.PI,Math.PI*2);ctx.lineTo(15,-38);
+  ctx.beginPath();ctx.arc(0,-49,20,Math.PI,Math.PI*2);ctx.lineTo(18,-40);
   ctx.quadraticCurveTo(4,-30,-15,-37);ctx.closePath();ctx.fill();
   if(p.kind==="ninja"){
     ctx.fillStyle=teamColor;ctx.fillRect(-13,-45,26,5);
@@ -296,16 +296,19 @@ function drawCharacter(p){
   }
 
   // eyes
-  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(5,-40,2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(6,-44,3,0,Math.PI*2);ctx.fill();
 
   // weapon
-  if(p.kind==="staff"){
-    ctx.strokeStyle="#c58a34";ctx.lineWidth=6;ctx.lineCap="round";
-    if(p.pose==="attack"){
-      ctx.beginPath();ctx.moveTo(backHand.x-4,backHand.y-5);ctx.lineTo(frontHand.x+5,frontHand.y+34);ctx.stroke();
-    }else{
-      ctx.beginPath();ctx.moveTo(-32,-6);ctx.lineTo(36,-24);ctx.stroke();
-    }
+  if(p.kind==="sword"){
+    const hx=frontHand.x, hy=frontHand.y;
+    ctx.save();
+    ctx.translate(hx,hy);
+    ctx.rotate(p.pose==="attack"?1.05:-0.35);
+    ctx.fillStyle="#394856";ctx.fillRect(-6,-4,13,8);
+    ctx.fillStyle="#dfe9ef";
+    ctx.beginPath();ctx.moveTo(5,-5);ctx.lineTo(46,0);ctx.lineTo(5,5);ctx.closePath();ctx.fill();
+    ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.stroke();
+    ctx.restore();
   }else{
     ctx.fillStyle="#dfe8ed";ctx.beginPath();
     const hx=frontHand.x, hy=frontHand.y;
@@ -358,8 +361,8 @@ class Ball {
 let blueScore=0, redScore=0;
 const players=[
   new Player("blue","ninja",155,false),
-  new Player("blue","staff",270,true),
-  new Player("red","staff",450,true),
+  new Player("blue","sword",270,true),
+  new Player("red","sword",450,true),
   new Player("red","ninja",565,true)
 ];
 const ball=new Ball();
@@ -380,17 +383,17 @@ function kickBall(p){
   const kickX=p.x+p.facing*(air?48:42);
   const kickY=p.y+(air?-3:5);
   const dx=ball.x-kickX,dy=ball.y-kickY,d=len(dx,dy);
-  const reach=air?122:105;
+  const reach=air?132:118;
 
   // 大きめの扇形判定。少し後ろにあるボールも拾える。
   const forward=(ball.x-p.x)*p.facing;
-  if(d<reach && forward>-24){
+  if(d<reach && forward>-38){
     const aimX=clamp(dx/Math.max(d,1),-.75,.75);
     const aimY=clamp(dy/Math.max(d,1),-.85,.85);
-    const power=air?8.8:7.0;
+    const power=air?8.4:7.2;
     ball.vx=p.facing*(power+Math.abs(aimX)*1.4)+p.vx*.65;
     // ボールの位置で軌道が大きく変わる。上を蹴れば下へ、下を蹴れば上へ。
-    ball.vy=(air ? aimY*7.4-1.2 : -7.6+aimY*2.2)+p.vy*.24;
+    ball.vy=(air ? aimY*8.0-3.2 : -11.4+aimY*1.8)+p.vy*.20;
     ball.lastTouch=p.team;ball.wallHits=0;
     hitBursts.push({x:ball.x,y:ball.y,life:10,color:"#eefcff"});
   }
@@ -414,24 +417,28 @@ function weaponAttack(p){
   if(p.kind==="ninja"){
     projectiles.push({x:p.x+p.facing*28,y:p.y-12,vx:p.facing*10.5,life:65,team:p.team});
   }else{
-    // 棍は広い縦判定で真下へ叩き落とす。
+    // 片手剣：斜め下へ振り下ろし、相手を落とす。
+    const slashX=p.x+p.facing*46;
+    const slashY=p.y+10;
     for(const q of players){
       if(q.team===p.team)continue;
-      const dx=q.x-p.x,dy=q.y-p.y;
-      if(Math.abs(dx)<105 && dy>-42 && dy<125){
-        q.vy=Math.max(q.vy,11.8);
-        q.vx+=p.facing*1.5;
-        q.stun=13;q.hitFlash=7;
-        hitBursts.push({x:q.x,y:q.y,life:14,color:"#ff8f48"});
-        p.vy-=.5;
+      const dx=q.x-slashX,dy=q.y-slashY;
+      if(len(dx,dy)<112 && (q.x-p.x)*p.facing>-28){
+        q.vy=Math.max(q.vy,10.6);
+        q.vx+=p.facing*3.2;
+        q.stun=12;q.hitFlash=7;
+        hitBursts.push({x:q.x,y:q.y,life:14,color:"#ffd46a"});
+        p.vy-=0.7;
       }
     }
+    swordSlashes.push({x:slashX,y:slashY,dir:p.facing,life:9});
   }
 }
 const projectiles=[];
 const hitBursts=[];
+const swordSlashes=[];
 function updateProjectiles(){
-  for(let i=hitBursts.length-1;i>=0;i--){hitBursts[i].life--;if(hitBursts[i].life<=0)hitBursts.splice(i,1);}
+  for(let i=hitBursts.length-1;i>=0;i--){hitBursts[i].life--;if(hitBursts[i].life<=0)hitBursts.splice(i,1);} for(let i=swordSlashes.length-1;i>=0;i--){swordSlashes[i].life--;if(swordSlashes[i].life<=0)swordSlashes.splice(i,1);}
   for(let i=projectiles.length-1;i>=0;i--){
     const k=projectiles[i];k.x+=k.vx;k.life--;
     for(const p of players){
@@ -467,7 +474,7 @@ function score(team){
   statusEl.textContent=(team==="blue"?"BLUE":"RED")+" GOAL!";
   ball.reset();
   players.forEach((p,i)=>{p.x=[155,270,450,565][i];p.y=arena.floor-32;p.vx=p.vy=0;p.airJumpAvailable=true;});
-  setTimeout(()=>statusEl.textContent="空中ではA/Bを押し続けて連続攻撃できます",700);
+  setTimeout(()=>statusEl.textContent="地上キックで高く浮かせ、空中で連続攻撃できます",700);
 }
 
 function drawArena(){
@@ -514,6 +521,13 @@ function drawProjectiles(){
     ctx.save();ctx.globalAlpha=h.life/14;ctx.strokeStyle=h.color;ctx.lineWidth=4;
     const r=(15-h.life)*3+5;
     ctx.beginPath();ctx.arc(h.x,h.y,r,0,Math.PI*2);ctx.stroke();ctx.restore();
+  });
+  swordSlashes.forEach(s=>{
+    ctx.save();ctx.globalAlpha=s.life/9;ctx.strokeStyle="#fff3a8";ctx.lineWidth=7;ctx.lineCap="round";
+    ctx.beginPath();
+    if(s.dir>0)ctx.arc(s.x-18,s.y-18,45,-1.1,0.9);
+    else ctx.arc(s.x+18,s.y-18,45,Math.PI-0.9,Math.PI+1.1);
+    ctx.stroke();ctx.restore();
   });
 }
 
