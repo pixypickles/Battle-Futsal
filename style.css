@@ -59,3 +59,5 @@ button { font: inherit; color: inherit; }
 @media (min-width: 900px) {
   #app { max-width: 760px; left: 50%; transform: translateX(-50%); box-shadow: 0 0 40px rgba(0,0,0,.45); }
 }
+.hud-actions { justify-self: end; display: flex; gap: 6px; }
+#classBtn { border: 1px solid #bcae62; background: #4a4221; border-radius: 999px; padding: 6px 9px; font-size: 11px; font-weight: 900; }

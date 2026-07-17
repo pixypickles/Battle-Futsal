@@ -13,6 +13,14 @@
   const GOAL = { y: 286, radius: 43, height: 158 };
   const GRAVITY = 850;
   const effects = [];
+  const CLASS_ORDER = ['knight','mace','monk','ninja'];
+  const CLASS_DATA = {
+    knight:{label:'KNIGHT',speed:225},
+    mace:{label:'MACE',speed:194},
+    monk:{label:'MONK',speed:218},
+    ninja:{label:'NINJA',speed:248}
+  };
+  let selectedClass = 'knight';
   const trails = [];
   const input = { x:0, y:0, a:false, b:false, c:false };
   let shake = 0, hitStop = 0;
@@ -31,9 +39,9 @@
   }
 
   class Actor {
-    constructor(x,y,team,isPlayer=false,role='striker'){
-      Object.assign(this,{x,y,team,isPlayer,role,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,attackAnim:0});
-      this.speed = isPlayer ? 225 : role==='support' ? 202 : 208;
+    constructor(x,y,team,isPlayer=false,role='striker',classType='knight'){
+      Object.assign(this,{x,y,team,isPlayer,role,classType,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,attackAnim:0,dashCool:0});
+      this.speed = CLASS_DATA[classType].speed + (isPlayer?0:(role==='support'?-12:-7));
       this.facing = team==='blue' ? -Math.PI/2 : Math.PI/2;
       this.aiThink = Math.random()*.15;
     }
@@ -42,6 +50,7 @@
       this.coolA=Math.max(0,this.coolA-dt);
       this.coolB=Math.max(0,this.coolB-dt);
       this.attackAnim=Math.max(0,this.attackAnim-dt);
+      this.dashCool=Math.max(0,this.dashCool-dt);
       this.guard=false;
       if(this.stun>0){
         this.holdB=false; this.chargeB=0;
@@ -74,7 +83,10 @@
         this.holdA=this.holdB=false; this.chargeA=this.chargeB=0;
         if(input.a)this.slash();
         if(input.b){ if(canDirectKick(this)) this.directKick(); else this.bash(); }
-        if(input.c)this.guard=true;
+        if(input.c){
+          if(this.classType==='monk'||this.classType==='ninja') this.mobilitySkill();
+          else this.guard=true;
+        }
       }
     }
     aiControl(dt){
@@ -95,7 +107,8 @@
 
         // AI should shoot decisively when it has a reasonable lane. Full charge is reserved
         // for genuinely open chances, so it does not stand still waiting to be hit.
-        if(shotDist<340 && (danger>58 || shotDist<175)){
+        const inScoringZone=this.team==='blue'?this.y<72:this.y>-72;
+        if(shotDist<265 && inScoringZone && (danger>58 || shotDist<175)){
           this.chargeB=Math.min(.62,this.chargeB+dt);
           this.holdB=true;
           this.vx*=.68; this.vy*=.68;
@@ -194,8 +207,41 @@
         this.guard=true;
       }
     }
-    slash(){ if(this.coolA>0||this.stun>0)return; this.coolA=.56; this.attackAnim=.30; strike(this,96,1.12,165,'SLASH'); pokeBall(this,195); }
-    bash(){ if(this.coolB>0||this.stun>0)return; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.34,720,'BASH'); pokeBall(this,280); }
+    slash(){
+      if(this.coolA>0||this.stun>0)return;
+      this.attackAnim=.30;
+      if(this.classType==='mace'){ this.coolA=.82; strike(this,100,.58,560,'MACE'); pokeBall(this,360); }
+      else if(this.classType==='monk'){ this.coolA=.54; strike(this,132,.72,250,'SWEEP'); pokeBall(this,285); }
+      else if(this.classType==='ninja'){ this.coolA=.30; this.attackAnim=.20; strike(this,82,.46,175,'CUT'); pokeBall(this,170); }
+      else { this.coolA=.56; strike(this,96,1.12,165,'SLASH'); pokeBall(this,195); }
+    }
+    bash(){
+      if(this.coolB>0||this.stun>0)return;
+      if(this.classType==='mace'){ this.coolB=1.32; this.vx+=Math.cos(this.facing)*250; this.vy+=Math.sin(this.facing)*250; strike(this,92,.28,920,'CRUSH'); pokeBall(this,430); }
+      else if(this.classType==='monk'){ this.coolB=.90; this.vx+=Math.cos(this.facing)*300; this.vy+=Math.sin(this.facing)*300; strike(this,108,.38,460,'THRUST'); pokeBall(this,330); }
+      else if(this.classType==='ninja'){ this.shuriken(); }
+      else { this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.34,720,'BASH'); pokeBall(this,280); }
+    }
+    shuriken(){
+      this.coolB=.78;
+      const foes=actors.filter(a=>a.team!==this.team&&a.stun<=0);
+      let target=null,best=195;
+      for(const f of foes){
+        const d=dist(this,f),ang=Math.abs(angleDiff(Math.atan2(f.y-this.y,f.x-this.x),this.facing));
+        if(d<best&&ang<.55){best=d;target=f;}
+      }
+      if(target){
+        const n=norm(target.x-this.x,target.y-this.y); target.stun=Math.max(target.stun,.42); target.vx=n.x*210; target.vy=n.y*210;
+        if(target.hasBall)dropBall(target,185); effects.push({x:target.x,y:target.y,z:38,t:.28,label:'SHURIKEN'});
+      } else effects.push({x:this.x+Math.cos(this.facing)*90,y:this.y+Math.sin(this.facing)*90,z:32,t:.18,label:'MISS'});
+    }
+    mobilitySkill(){
+      if(this.dashCool>0)return;
+      this.dashCool=this.classType==='ninja'?.62:.86;
+      const power=this.classType==='ninja'?520:390;
+      this.vx=Math.cos(this.facing)*power; this.vy=Math.sin(this.facing)*power;
+      effects.push({x:this.x,y:this.y,z:24,t:.18,label:this.classType==='ninja'?'DASH':'STEP'});
+    }
     pass(charge=0){
       if(!this.hasBall||this.coolA>0)return;
       this.coolA=.34;
@@ -219,11 +265,11 @@
     guardBall(){ this.guard=true; this.vx*=.54; this.vy*=.54; }
   }
 
-  const ball={x:0,y:0,z:14,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0,shotTime:0};
-  const player=new Actor(-72,175,'blue',true,'striker');
-  const ally=new Actor(78,148,'blue',false,'support');
-  const enemy=new Actor(-72,-170,'red',false,'striker');
-  const enemy2=new Actor(82,-145,'red',false,'support');
+  const ball={x:0,y:0,z:14,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0,shotTime:0,goalEligible:false,shotOriginY:0};
+  const player=new Actor(-72,175,'blue',true,'striker','knight');
+  const ally=new Actor(78,148,'blue',false,'support','mace');
+  const enemy=new Actor(-72,-170,'red',false,'striker','ninja');
+  const enemy2=new Actor(82,-145,'red',false,'support','monk');
   const actors=[player,ally,enemy,enemy2];
 
   function nearestActor(origin,list){
@@ -283,13 +329,13 @@
     actor.hasBall=false; ball.owner=null;
     ball.x=actor.x+Math.cos(actor.facing)*32; ball.y=actor.y+Math.sin(actor.facing)*32; ball.z=16;
     ball.vx=Math.cos(actor.facing)*force; ball.vy=Math.sin(actor.facing)*force; ball.vz=80;
-    ball.shotAssist=0; ball.shotTime=0;
+    ball.shotAssist=0; ball.shotTime=0; ball.goalEligible=false;
   }
   function releaseBall(actor,speed,lift){
     actor.hasBall=false; ball.owner=null;
     ball.x=actor.x+Math.cos(actor.facing)*35; ball.y=actor.y+Math.sin(actor.facing)*35; ball.z=18;
     ball.vx=Math.cos(actor.facing)*speed; ball.vy=Math.sin(actor.facing)*speed; ball.vz=lift;
-    ball.shotAssist=0; ball.shotTime=0;
+    ball.shotAssist=0; ball.shotTime=0; ball.goalEligible=false;
   }
 
   function releaseShot(actor,charge=0,direct=false){
@@ -320,6 +366,9 @@
     ball.shotAssist=direct?.55:charge;
     ball.targetY=goalY;
     ball.shotTime=1.6;
+    ball.shotOriginY=startY;
+    const advancedEnough=actor.team==='blue'?startY<72:startY>-72;
+    ball.goalEligible=direct||advancedEnough||planarDistance<238;
     actor.facing=shotAngle;
     trails.length=0;
   }
@@ -405,7 +454,8 @@
     if(!crossed)return;
     const inside=Math.hypot(ball.x,ball.z-GOAL.height)<GOAL.radius-ball.r*.72;
     const usefulArc=ball.vz<190;
-    if(inside && usefulArc && (team==='blue'?ball.vy<0:ball.vy>0)) score(team);
+    if(inside && usefulArc && ball.goalEligible && (team==='blue'?ball.vy<0:ball.vy>0)) score(team);
+    else if(inside && !ball.goalEligible) effects.push({x:ball.x,y:ball.y,z:ball.z,t:.28,label:'TOO FAR'});
   }
 
   function score(team){
@@ -419,7 +469,7 @@
   function resetPositions(){
     const starts=[[-72,175],[78,148],[-72,-170],[82,-145]];
     actors.forEach((a,i)=>Object.assign(a,{x:starts[i][0],y:starts[i][1],vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,facing:a.team==='blue'?-Math.PI/2:Math.PI/2}));
-    Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0,shotTime:0});
+    Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0,shotTime:0,goalEligible:false,shotOriginY:0});
     effects.length=0; trails.length=0; shake=0; hitStop=0;
   }
   function flash(text){
@@ -478,6 +528,9 @@
     ctx.globalAlpha=.25; ctx.lineWidth=24; ctx.strokeStyle='#8fa9b2'; ctx.beginPath(); ctx.ellipse(c.x,c.y+7,rx,ry,0,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
     ctx.setLineDash([14,14]); ctx.lineWidth=3; ctx.beginPath(); const l=project(-FIELD.r,0),r=project(FIELD.r,0);ctx.moveTo(l.x,l.y);ctx.lineTo(r.x,r.y);ctx.stroke();ctx.setLineDash([]);
     ctx.beginPath(); ctx.ellipse(c.x,c.y,70,60,0,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([8,10]); ctx.globalAlpha=.48; ctx.strokeStyle='#ffe36b';
+    for(const sy of [-72,72]){ const a=project(-286,sy),b=project(286,sy);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke(); }
+    ctx.setLineDash([]);ctx.globalAlpha=1;
     ctx.restore();
   }
 
@@ -505,26 +558,29 @@
     ctx.fillStyle=a.team==='blue'?(a.isPlayer?'#62b8f5':'#88d2ff'):(a.role==='support'?'#ff9292':'#ef6b6b');
     ctx.beginPath();ctx.roundRect(-20,-38,40,45,13);ctx.fill();ctx.stroke();
     ctx.fillStyle='#dce5e8';ctx.beginPath();ctx.arc(0,-44,16,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#26333a';ctx.fillRect(-12,-48,24,6);
-    // The sword is deliberately oversized and animated so the A action reads clearly on a phone.
+    // Each class has a distinct silhouette and attack animation.
     ctx.save();
     ctx.translate(18,-22);
-    let swordAngle=.16;
-    if(a.attackAnim>0){
-      const progress=1-a.attackAnim/.30;
-      const eased=1-Math.pow(1-clamp(progress,0,1),2);
-      swordAngle=-1.18+eased*2.38;
-      ctx.save();
-      ctx.globalAlpha=.42*(1-progress);
-      ctx.strokeStyle='#fff3b0';ctx.lineWidth=12;ctx.lineCap='round';
-      ctx.beginPath();ctx.arc(0,1,58,-1.18,swordAngle);ctx.stroke();
-      ctx.restore();
+    const progress=a.attackAnim>0?1-a.attackAnim/.30:0;
+    const swing=-1.18+(1-Math.pow(1-clamp(progress,0,1),2))*2.38;
+    const weaponAngle=a.attackAnim>0?swing:.16;
+    ctx.rotate(weaponAngle);
+    if(a.classType==='mace'){
+      ctx.fillStyle='#6f4528';ctx.fillRect(-5,-6,10,58);ctx.strokeRect(-5,-6,10,58);
+      ctx.fillStyle='#9ba8ad';ctx.beginPath();ctx.arc(0,-12,18,0,Math.PI*2);ctx.fill();ctx.stroke();
+    } else if(a.classType==='monk'){
+      ctx.fillStyle='#cfab69';ctx.fillRect(-5,-64,10,116);ctx.strokeRect(-5,-64,10,116);
+    } else if(a.classType==='ninja'){
+      ctx.fillStyle='#d9e2e6';ctx.beginPath();ctx.moveTo(-7,-38);ctx.lineTo(7,-38);ctx.lineTo(4,12);ctx.lineTo(-4,12);ctx.closePath();ctx.fill();ctx.stroke();
+    } else {
+      ctx.fillStyle='#6f4528';ctx.fillRect(-5,-3,10,17);ctx.strokeRect(-5,-3,10,17);
+      ctx.fillStyle='#ead8a7';ctx.beginPath();ctx.roundRect(-7,-52,14,52,5);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#d6a54d';ctx.fillRect(-13,-5,26,7);ctx.strokeRect(-13,-5,26,7);
     }
-    ctx.rotate(swordAngle);
-    ctx.fillStyle='#6f4528';ctx.fillRect(-5,-3,10,17);ctx.strokeRect(-5,-3,10,17);
-    ctx.fillStyle='#ead8a7';ctx.beginPath();ctx.roundRect(-7,-52,14,52,5);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#d6a54d';ctx.fillRect(-13,-5,26,7);ctx.strokeRect(-13,-5,26,7);
+    if(a.attackAnim>0){ctx.globalAlpha=.34*(1-progress);ctx.strokeStyle='#fff3b0';ctx.lineWidth=a.classType==='monk'?8:12;ctx.beginPath();ctx.arc(0,1,a.classType==='monk'?76:58,-1.18,swing);ctx.stroke();}
     ctx.restore();
-    ctx.fillStyle='#aab9c0';ctx.beginPath();ctx.roundRect(-34,-28,17,36,6);ctx.fill();ctx.stroke();
+    if(a.classType==='knight'||a.classType==='mace'){ctx.fillStyle='#aab9c0';ctx.beginPath();ctx.roundRect(-34,-28,17,36,6);ctx.fill();ctx.stroke();}
+    ctx.save();ctx.rotate(-(a.facing+Math.PI/2));ctx.font='800 10px system-ui';ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.8)';ctx.fillText(CLASS_DATA[a.classType].label,0,24);ctx.restore();
     if(a.role==='support'){ctx.strokeStyle='#ffe36b';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-12,27,0,Math.PI*2);ctx.stroke();}
     if(a.guard){ctx.strokeStyle='#fff';ctx.globalAlpha=.6;ctx.lineWidth=6;ctx.beginPath();ctx.arc(-9,-10,42,-1.1,1.1);ctx.stroke();}
     if(a.stun>0){ctx.save();ctx.rotate(-(a.facing+Math.PI/2));ctx.fillStyle='#ffe368';for(let i=0;i<3;i++){const ang=performance.now()*.006+i*Math.PI*2/3;ctx.beginPath();ctx.arc(Math.cos(ang)*22,-72+Math.sin(ang)*7,5,0,Math.PI*2);ctx.fill();}ctx.font='900 12px system-ui';ctx.textAlign='center';ctx.fillText('STUN',0,-91);ctx.restore();}
@@ -587,6 +643,11 @@
   addEventListener('keydown',e=>{keys.add(e.code);if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault()});
   addEventListener('keyup',e=>keys.delete(e.code));
   setInterval(()=>{input.x=(keys.has('ArrowRight')||keys.has('KeyD')?1:0)-(keys.has('ArrowLeft')||keys.has('KeyA')?1:0);input.y=(keys.has('ArrowDown')||keys.has('KeyS')?1:0)-(keys.has('ArrowUp')||keys.has('KeyW')?1:0);input.a=keys.has('KeyJ');input.b=keys.has('KeyK');input.c=keys.has('KeyL')},16);
+  const classBtn=document.getElementById('classBtn');
+  function applyPlayerClass(type){
+    selectedClass=type; player.classType=type; player.speed=CLASS_DATA[type].speed; classBtn.textContent=CLASS_DATA[type].label; resetPositions(); flash(CLASS_DATA[type].label);
+  }
+  classBtn.addEventListener('click',()=>{const i=(CLASS_ORDER.indexOf(selectedClass)+1)%CLASS_ORDER.length;applyPlayerClass(CLASS_ORDER[i]);});
   document.getElementById('restartBtn').addEventListener('click',()=>{blueScore=redScore=0;gameTime=120;running=true;blueScoreEl.textContent='0';redScoreEl.textContent='0';messageEl.hidden=true;resetPositions()});
   addEventListener('resize',resize);resize();resetPositions();requestAnimationFrame(loop);
 })();
