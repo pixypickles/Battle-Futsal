@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Combat Airball Prototype 2.8</title>
+<title>Combat Airball Prototype 2.9</title>
 <style>
   :root{
     --bg:#0d1326; --panel:#151e37; --ink:#f3f6ff; --muted:#a9b6d2;
@@ -45,6 +45,7 @@
   .touchBtn.staff{background:linear-gradient(180deg,#ffd76aee,#b96f18ee);color:#211300}
   .touchBtn.kick{background:linear-gradient(180deg,#6ee8ffee,#16789aee);color:#04141b}
   .touchBtn.jump{background:linear-gradient(180deg,#bd9bffee,#6947bfee)}
+  .touchBtn.smash{background:linear-gradient(180deg,#ff9b74ee,#a43a20ee)}
   .touchBtn.active{transform:translateY(6px) scale(.96);box-shadow:0 2px 0 #070b15aa}
   .touchLabel{font-size:12px;line-height:1.05;text-align:center}
   .touchLabel b{display:block;font-size:26px}
@@ -76,10 +77,10 @@
       <div id="help">
         <b>青チーム（操作）</b><br>
         移動：A / D　ジャンプ：W<br>
-        長棍：F　キック：G<br>
-        <span style="color:#9fb0cf">空中F＝横シュート / 空中G＝蹴り上げ</span>
+        横突き：F　キック：G　振り下ろし：H<br>
+        <span style="color:#9fb0cf">F＝横 / G＝上 / H＝前方・斜め下</span>
       </div>
-      <div id="badge">Combat Airball Prototype 2.8</div>
+      <div id="badge">Combat Airball Prototype 2.9</div>
 
       <div id="touchControls" aria-label="タッチ操作">
         <div class="touchGroup" id="moveControls">
@@ -90,6 +91,7 @@
           <button class="touchBtn action jump" data-key="KeyW" aria-label="ジャンプ"><span class="touchLabel"><b>↑</b>ジャンプ</span></button>
           <button class="touchBtn action staff" data-key="KeyF" aria-label="長棍"><span class="touchLabel"><b>F</b>長棍</span></button>
           <button class="touchBtn action kick" data-key="KeyG" aria-label="キック"><span class="touchLabel"><b>G</b>キック</span></button>
+          <button class="touchBtn action smash" data-key="KeyH" aria-label="振り下ろし"><span class="touchLabel"><b>H</b>振下し</span></button>
         </div>
       </div>
 
@@ -133,18 +135,19 @@ class Fighter{
   constructor(x,team,ai=false){
     this.x=x; this.y=FLOOR-43; this.vx=0; this.vy=0; this.team=team; this.ai=ai;
     this.facing=team===BLUE?1:-1; this.onGround=true; this.coyote=0;
-    this.attack=0; this.attackKind=''; this.kick=0; this.stun=0; this.wallStun=0;
-    this.jumpBuffer=0; this.attackCd=0; this.kickCd=0; this.flash=0; this.id=Math.random();
+    this.attack=0; this.attackKind=''; this.kick=0; this.smash=0; this.stun=0; this.wallStun=0;
+    this.jumpBuffer=0; this.attackCd=0; this.kickCd=0; this.smashCd=0; this.flash=0; this.id=Math.random();
     this.targetX=x; this.airJumps=1;
   }
   control(dt){
     if(this.stun>0){this.stun-=dt; return}
-    let move=0, jump=false, attack=false, kick=false;
+    let move=0, jump=false, attack=false, kick=false, smash=false;
     if(!this.ai){
       move=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
       jump=pressed('KeyW');
       attack=pressed('KeyF');
       kick=pressed('KeyG');
+      smash=pressed('KeyH');
     } else {
       const b=ball;
       const attackRange=Math.abs(b.x-this.x)<135 && Math.abs(b.y-this.y)<90;
@@ -154,7 +157,10 @@ class Fighter{
       if(defend) tx=this.team===BLUE?340:940;
       if(enemy && Math.abs(enemy.x-this.x)<120 && Math.abs(enemy.y-this.y)<95 && Math.random()<0.035) attack=true;
       if(attackRange){
-        if(!this.onGround && Math.abs(b.x-this.x)<120) attack=Math.random()<0.11;
+        const towardOwnGoal=(this.team===BLUE&&b.vx<0)||(this.team===RED&&b.vx>0);
+        if(towardOwnGoal && Math.random()<0.16) smash=true;
+        else if(!this.onGround && b.y>this.y-20 && Math.random()<0.10) smash=true;
+        else if(!this.onGround && Math.abs(b.x-this.x)<120) attack=Math.random()<0.11;
         else if(Math.random()<0.075) kick=true;
       }
       if(b.y<this.y-80 && Math.abs(b.x-this.x)<260 && (this.onGround||this.airJumps>0) && Math.random()<0.05) jump=true;
@@ -181,13 +187,15 @@ class Fighter{
       this.vx+=this.facing*(this.onGround?45:95);
     }
     if(kick && this.kickCd<=0){this.kick=.31; this.kickCd=.38}
+    if(smash && this.smashCd<=0){this.smash=.48; this.smashCd=.58; this.attackKind=this.onGround?'groundSmash':'airSmash'}
   }
   update(dt){
     this.control(dt);
-    this.attackCd=Math.max(0,this.attackCd-dt); this.kickCd=Math.max(0,this.kickCd-dt);
+    this.attackCd=Math.max(0,this.attackCd-dt); this.kickCd=Math.max(0,this.kickCd-dt); this.smashCd=Math.max(0,this.smashCd-dt);
     this.flash=Math.max(0,this.flash-dt); this.wallStun=Math.max(0,this.wallStun-dt);
     if(this.attack>0) this.attack-=dt;
     if(this.kick>0) this.kick-=dt;
+    if(this.smash>0) this.smash-=dt;
     if(!this.onGround){this.vy+=1350*dt; this.coyote=Math.max(0,this.coyote-dt)}
     this.x+=this.vx*dt; this.y+=this.vy*dt;
     this.vx*=Math.pow(this.onGround?.80:.965,dt*60);
@@ -246,6 +254,29 @@ class Fighter{
         }
       }
     }
+    if(this.smash>0){
+      const elapsed=.48-this.smash;
+      if(elapsed>.16&&elapsed<.34){
+        const airborne=this.attackKind==='airSmash';
+        const hx=this.x+this.facing*(airborne?70:82);
+        const hy=this.y+(airborne?38:12);
+        for(const o of fighters){
+          if(o===this || o.team===this.team || o.flash>.06) continue;
+          if(circleHit(hx,hy,78,o.x,o.y,31)){
+            o.vx=this.facing*(airborne?420:520);
+            o.vy=airborne?720:260;
+            o.stun=.28; o.flash=.14; freeze=.05; shake=16;
+            burst(o.x,o.y,'#ffd4bd',20); smashTrail(this.x,this.y,this.facing,'#ffb48e');
+          }
+        }
+        if(ball.hitCd<=0 && circleHit(hx,hy,88,ball.x,ball.y,ball.r)){
+          ball.vx=this.facing*(airborne?760:860);
+          ball.vy=airborne?520:-260;
+          ball.lastTeam=this.team; ball.hitCd=.14; freeze=.06; shake=19;
+          burst(ball.x,ball.y,'#fff0d8',25); smashTrail(this.x,this.y,this.facing,'#fff0c2');
+        }
+      }
+    }
   }
   draw(){
     const t=performance.now()/1000;
@@ -253,16 +284,17 @@ class Fighter{
     const dark=this.team===BLUE?'#1269a5':'#a61f36';
     const attackP=this.attack>0?1-this.attack/.42:0;
     const kickP=this.kick>0?1-this.kick/.31:0;
+    const smashP=this.smash>0?1-this.smash/.48:0;
     ctx.save(); ctx.translate(this.x,this.y);
     if(this.flash>0){ctx.shadowBlur=28;ctx.shadowColor='#fff'}
     // shadow
     ctx.globalAlpha=.22; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,42,29,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-    // robe
-    ctx.fillStyle=dark; roundRect(-21,-6,42,48,13);ctx.fill();
-    ctx.fillStyle=teamC; roundRect(-18,-9,36,42,12);ctx.fill();
+    // simple illustrated monk silhouette
+    ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(-22,38);ctx.quadraticCurveTo(-27,12,-16,-8);ctx.quadraticCurveTo(0,-17,16,-8);ctx.quadraticCurveTo(27,12,22,38);ctx.closePath();ctx.fill();
+    ctx.fillStyle=teamC;ctx.beginPath();ctx.moveTo(-18,34);ctx.quadraticCurveTo(-21,10,-13,-5);ctx.quadraticCurveTo(0,-12,13,-5);ctx.quadraticCurveTo(21,10,18,34);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#f5e6bd';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-14,7);ctx.lineTo(14,7);ctx.stroke();
     ctx.fillStyle='#f7ddb2';ctx.beginPath();ctx.arc(0,-30,18,0,Math.PI*2);ctx.fill();
-    // hood/headband
-    ctx.strokeStyle=teamC;ctx.lineWidth=7;ctx.beginPath();ctx.arc(0,-31,17,Math.PI,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=teamC;ctx.beginPath();ctx.arc(0,-35,18,Math.PI,Math.PI*2);ctx.lineTo(18,-31);ctx.lineTo(-18,-31);ctx.closePath();ctx.fill();
     ctx.fillStyle='#243047';ctx.beginPath();ctx.arc(this.facing*5,-31,2.4,0,Math.PI*2);ctx.fill();
     // legs
     ctx.strokeStyle='#d7e1f1';ctx.lineWidth=8;ctx.lineCap='round';
@@ -279,6 +311,16 @@ class Fighter{
       }else{
         if(attackP<.48){const p=easeOutBack(attackP/.48);sx=lerp(-52,78,p)*this.facing;ang=-.04*this.facing}
         else{const p=(attackP-.48)/.52;sx=78*this.facing;sy=lerp(-8,-32,p);ang=lerp(-.04,-.72,p)*this.facing}
+      }
+    }
+    if(this.smash>0){
+      if(smashP<.42){
+        const p=smashP/.42;
+        sx=lerp(-24,0,p)*this.facing; sy=lerp(-12,-66,p); ang=lerp(-.15,-1.38,p)*this.facing;
+      }else{
+        const p=easeOutBack((smashP-.42)/.58);
+        sx=lerp(0,78,p)*this.facing; sy=lerp(-66,10,p);
+        ang=lerp(-1.38,.72,p)*this.facing;
       }
     }
     ctx.save();ctx.translate(sx,sy);ctx.rotate(ang);
@@ -337,7 +379,7 @@ const fighters=[
 const ball=new Ball();
 const pressQueue=new Set();
 addEventListener('keydown',e=>{
-  if(['KeyA','KeyD','KeyW','KeyF','KeyG','Enter','Space'].includes(e.code)) e.preventDefault();
+  if(['KeyA','KeyD','KeyW','KeyF','KeyG','KeyH','Enter','Space'].includes(e.code)) e.preventDefault();
   if(!keys.has(e.code)) pressQueue.add(e.code);
   keys.add(e.code);
   if((e.code==='Enter'||e.code==='Space')&&!running) startGame();
@@ -382,7 +424,7 @@ function startGame(){
 }
 function resetPositions(){
   const xs=[300,455,825,980];
-  fighters.forEach((f,i)=>{f.x=xs[i];f.y=FLOOR-43;f.vx=f.vy=0;f.stun=0;f.attack=0;f.kick=0;f.onGround=true;f.airJumps=1});
+  fighters.forEach((f,i)=>{f.x=xs[i];f.y=FLOOR-43;f.vx=f.vy=0;f.stun=0;f.attack=0;f.kick=0;f.smash=0;f.onGround=true;f.airJumps=1});
   ball.reset(); resetTimer=.65;
 }
 function score(team){
@@ -399,7 +441,8 @@ function showNotice(text,color){
 function burst(x,y,c,n){
   for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=rnd(70,420);particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rnd(.18,.65),max:.65,size:rnd(2,8),c})}
 }
-function slashTrail(x,y,dir,c){trails.push({x,y,dir,c,life:.18,max:.18})}
+function slashTrail(x,y,dir,c){trails.push({x,y,dir,c,life:.18,max:.18,type:'slash'})}
+function smashTrail(x,y,dir,c){trails.push({x,y,dir,c,life:.24,max:.24,type:'smash'})}
 
 function update(dt){
   if(!running)return;
@@ -445,7 +488,15 @@ function draw(){
   // trails behind actors
   for(const t of trails){
     const a=t.life/t.max;ctx.save();ctx.globalAlpha=a*.78;ctx.strokeStyle=t.c;ctx.lineWidth=26*a+4;ctx.lineCap='round';ctx.shadowBlur=24;ctx.shadowColor=t.c;
-    ctx.beginPath();ctx.moveTo(t.x-t.dir*92,t.y-8);ctx.quadraticCurveTo(t.x,t.y-42,t.x+t.dir*150,t.y);ctx.stroke();ctx.restore();
+    ctx.beginPath();
+    if(t.type==='smash'){
+      ctx.moveTo(t.x-t.dir*18,t.y-105);
+      ctx.quadraticCurveTo(t.x+t.dir*75,t.y-62,t.x+t.dir*126,t.y+45);
+    }else{
+      ctx.moveTo(t.x-t.dir*92,t.y-8);
+      ctx.quadraticCurveTo(t.x,t.y-42,t.x+t.dir*150,t.y);
+    }
+    ctx.stroke();ctx.restore();
   }
   ball.draw();fighters.forEach(f=>f.draw());
   for(const p of particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
