@@ -91,7 +91,7 @@
     guardBall(){ this.guard=true; this.vx*=.54; this.vy*=.54; }
   }
 
-  const ball={x:0,y:0,z:12,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0,wallTouch:0};
+  const ball={x:0,y:0,z:12,vx:0,vy:0,vz:0,r:14,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0};
   const player=new Actor(0,170,'blue',true), enemy=new Actor(0,-170,'red',false);
 
   function angleDiff(a,b){ return Math.atan2(Math.sin(a-b),Math.cos(a-b)); }
@@ -121,14 +121,16 @@
   function releaseShot(actor,charge=0,direct=false){
     const goalY=actor.team==='blue'?-GOAL.y:GOAL.y;
     const desired=Math.atan2(goalY-actor.y,-actor.x);
-    const assist=direct?.78:(.56+charge*.38);
-    let shotAngle=actor.facing+angleDiff(desired,actor.facing)*assist;
+    // A quick shot mostly follows the player's facing. Holding B adds initial aim help,
+    // then continues bending the ball toward the ring while it is airborne.
+    const launchAssist=direct?.55:(.10+charge*.24);
+    let shotAngle=actor.facing+angleDiff(desired,actor.facing)*launchAssist;
     if(!actor.isPlayer)shotAngle+=(Math.random()-.5)*(.12*(1-charge));
-    const speed=(direct?620:535)+charge*145;
+    const speed=(direct?620:535)+charge*115;
     let vy=Math.sin(shotAngle)*speed;
     const requiredSign=goalY<actor.y?-1:1;
-    if(Math.sign(vy)!==requiredSign||Math.abs(vy)<145){
-      shotAngle=desired+angleDiff(shotAngle,desired)*.22;
+    if(Math.sign(vy)!==requiredSign||Math.abs(vy)<120){
+      shotAngle=actor.facing+angleDiff(desired,actor.facing)*(direct?.72:(.28+charge*.24));
       vy=Math.sin(shotAngle)*speed;
     }
     const startZ=direct?Math.max(22,ball.z):18;
@@ -136,12 +138,13 @@
     const startY=direct?ball.y:actor.y+Math.sin(shotAngle)*35;
     const travel=Math.max(.34,Math.abs((goalY-startY)/(vy||1)));
     const exactVz=(GOAL.height-startZ+.5*GRAVITY*travel*travel)/travel;
-    // Taps already arc upward. A full charge removes vertical error entirely.
-    const error=(1-charge)*(direct?10:26)*(actor.isPlayer?1:(Math.random()-.5));
+    const error=(1-charge)*(direct?10:22)*(actor.isPlayer?1:(Math.random()-.5));
     actor.hasBall=false; ball.owner=null;
     ball.x=startX; ball.y=startY; ball.z=startZ;
     ball.vx=Math.cos(shotAngle)*speed; ball.vy=vy;
     ball.vz=Math.max(250,Math.min(660,exactVz+error));
+    ball.shotAssist=direct?.55:charge;
+    ball.targetY=goalY;
     actor.facing=shotAngle;
   }
 
@@ -151,12 +154,26 @@
     if(ball.owner){ const a=ball.owner; ball.x=a.x+Math.cos(a.facing)*30; ball.y=a.y+Math.sin(a.facing)*30; ball.z=14; ball.vx=a.vx; ball.vy=a.vy; ball.vz=0; return; }
     ball.prevY=ball.y;
     ball.wallTouch=Math.max(0,ball.wallTouch-dt);
+    // Charged shots curve gradually after the kick. This is directional assistance,
+    // not an instant snap, so a badly aimed shot can still miss.
+    if(ball.shotAssist>0 && ball.z>ball.r+5){
+      const movingTowardGoal=(ball.targetY<0&&ball.vy<0)||(ball.targetY>0&&ball.vy>0);
+      if(movingTowardGoal){
+        const speed=Math.hypot(ball.vx,ball.vy);
+        const current=Math.atan2(ball.vy,ball.vx);
+        const desired=Math.atan2(ball.targetY-ball.y,-ball.x);
+        const maxTurn=(.12+ball.shotAssist*1.18)*dt;
+        const turn=Math.max(-maxTurn,Math.min(maxTurn,angleDiff(desired,current)));
+        const next=current+turn;
+        ball.vx=Math.cos(next)*speed; ball.vy=Math.sin(next)*speed;
+      }
+    }
     ball.x+=ball.vx*dt; ball.y+=ball.vy*dt; ball.z+=ball.vz*dt; ball.vz-=GRAVITY*dt;
     if(ball.z<=ball.r){
       ball.z=ball.r;
       if(ball.vz<0)ball.vz*=-.36;
       ball.vx*=Math.pow(.09,dt); ball.vy*=Math.pow(.09,dt);
-      if(Math.hypot(ball.vx,ball.vy)<18){ ball.vx=0; ball.vy=0; }
+      if(Math.hypot(ball.vx,ball.vy)<18){ ball.vx=0; ball.vy=0; ball.shotAssist=0; }
     }
     const d=Math.hypot(ball.x,ball.y), max=FIELD.r-ball.r;
     if(d>max){
@@ -198,7 +215,7 @@
   }
 
   function score(team){ if(!running)return; team==='blue'?blueScore++:redScore++; blueScoreEl.textContent=blueScore; redScoreEl.textContent=redScore; flash(team==='blue'?'RING GOAL!':'ENEMY GOAL'); resetPositions(); }
-  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0}); effects.length=0; shake=0; hitStop=0; }
+  function resetPositions(){ Object.assign(player,{x:0,y:170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(enemy,{x:0,y:-170,vx:0,vy:0,stun:0,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0}); Object.assign(ball,{x:0,y:0,z:14,vx:0,vy:0,vz:0,owner:null,prevY:0,wallTouch:0,shotAssist:0,targetY:0}); effects.length=0; shake=0; hitStop=0; }
   function flash(text){ messageEl.textContent=text; messageEl.hidden=false; clearTimeout(flash.t); flash.t=setTimeout(()=>messageEl.hidden=true,850); }
 
   function update(dt){
@@ -281,8 +298,16 @@
 
   function drawBall(){
     const shadow=project(ball.x,ball.y,0), p=project(ball.x,ball.y,ball.z);
-    ctx.save();ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(shadow.x,shadow.y,16*p.s,7*p.s,0,0,7);ctx.fill();
-    ctx.translate(p.x,p.y);ctx.fillStyle='#f5f2de';ctx.strokeStyle='#15191b';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,ball.r*p.s,0,7);ctx.fill();ctx.stroke();ctx.restore();
+    const altitude=Math.max(0,ball.z-ball.r);
+    // Exaggerated perspective: airborne balls grow on screen so their height is readable
+    // even on a small phone display. Physics and collision size remain unchanged.
+    const heightScale=1+Math.min(1.05,altitude/175)*.68;
+    const shadowScale=Math.max(.38,1-altitude/250);
+    const shadowAlpha=Math.max(.08,.30-altitude/720);
+    const visualRadius=ball.r*p.s*heightScale;
+    ctx.save();ctx.fillStyle=`rgba(0,0,0,${shadowAlpha})`;ctx.beginPath();ctx.ellipse(shadow.x,shadow.y,16*p.s*shadowScale,7*p.s*shadowScale,0,0,7);ctx.fill();
+    ctx.translate(p.x,p.y);ctx.fillStyle='#f5f2de';ctx.strokeStyle='#15191b';ctx.lineWidth=Math.max(3,4*heightScale);ctx.beginPath();ctx.arc(0,0,visualRadius,0,7);ctx.fill();ctx.stroke();
+    ctx.globalAlpha=Math.min(.42,altitude/260);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(-visualRadius*.22,-visualRadius*.22,visualRadius*.46,Math.PI*1.05,Math.PI*1.62);ctx.stroke();ctx.restore();
   }
 
   function resize(){ const rect=canvas.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1); canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);const scale=Math.min(canvas.width/W,canvas.height/H),ox=(canvas.width-W*scale)/2,oy=(canvas.height-H*scale)/2;ctx.setTransform(scale,0,0,scale,ox,oy); }
