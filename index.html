@@ -2,35 +2,30 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <meta name="theme-color" content="#101820" />
-  <title>Battle Futsal Prototype</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Combat Airball v0.1</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main id="app">
-    <header class="hud">
-      <div><span id="blueScore">0</span> - <span id="redScore">0</span></div>
-      <div id="timer">02:00</div>
-      <div class="hud-actions"><button id="classBtn" type="button">KNIGHT</button><button id="restartBtn" type="button">RESTART</button></div>
+    <header>
+      <div><strong>COMBAT AIRBALL</strong><span> v0.1</span></div>
+      <div id="score">BLUE 0 - 0 RED</div>
     </header>
-
-    <canvas id="game" aria-label="Battle Futsal game canvas"></canvas>
-
-    <section class="controls" aria-label="touch controls">
-      <div id="stick" class="stick" aria-label="movement stick">
-        <div id="stickKnob" class="stick-knob"></div>
-      </div>
-      <div class="buttons">
-        <button id="btnC" class="action c" type="button">C</button>
-        <button id="btnA" class="action a" type="button">A</button>
-        <button id="btnB" class="action b" type="button">B</button>
+    <canvas id="game" width="960" height="540" aria-label="Combat Airball prototype"></canvas>
+    <section id="hud">
+      <div id="stick" class="pad"><div id="knob"></div></div>
+      <div id="buttons">
+        <button id="btnA"><b>A</b><small>クナイ</small></button>
+        <button id="btnB"><b>B</b><small>トス</small></button>
+        <button id="btnC"><b>C</b><small>ジャンプ</small></button>
       </div>
     </section>
-
-    <div id="message" class="message" hidden></div>
+    <footer>
+      PC: WASD / 矢印で移動、J=武器、K=トス、L=ジャンプ・空中キック。<br>
+      自分がトスした球は自分では得点不可。味方・敵のトスはジャンプキックで得点可能。
+    </footer>
   </main>
-
   <script src="game.js"></script>
 </body>
 </html>
