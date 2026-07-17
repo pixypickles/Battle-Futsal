@@ -15,9 +15,9 @@ const norm=(x,y)=>{const d=Math.hypot(x,y)||1;return{x:x/d,y:y/d}};
 const rnd=(a,b)=>a+Math.random()*(b-a);
 
 const classData={
- ninja:{label:'NINJA',speed:220,jump:420,air:0.9,color:'#5bc8ff'},
- staff:{label:'STAFF',speed:205,jump:395,air:0.72,color:'#e3c96c'},
- gauntlet:{label:'GAUNTLET',speed:195,jump:405,air:0.78,color:'#ff9b72'}
+ ninja:{label:'NINJA',speed:220,jump:560,air:0.9,color:'#5bc8ff'},
+ staff:{label:'STAFF',speed:205,jump:540,air:0.72,color:'#e3c96c'},
+ gauntlet:{label:'GAUNTLET',speed:195,jump:550,air:0.78,color:'#ff9b72'}
 };
 function makePlayer(team,cls,x,y,human=false){return {team,cls,x,y,z:0,vx:0,vy:0,vz:0,face:team===0?1:-1,human,onGround:true,wallReady:true,attackCd:0,tossCd:0,stun:0,anim:0,hasBall:false,id:players.length};}
 const players=[];
@@ -32,7 +32,7 @@ const ball={x:W/2,y:H/2,z:0,vx:0,vy:0,vz:0,owner:null,lastToss:null,lastTouch:nu
 const projectiles=[];
 const effects=[];
 const rings=[];
-for(const team of [0,1]) for(const yy of [185,355]) rings.push({team,x:team===0?78:882,y:yy,z:170,r:30});
+rings.push({team:0,x:260,y:270,z:200,r:30},{team:0,x:700,y:270,z:200,r:30},{team:1,x:480,y:90,z:200,r:30},{team:1,x:480,y:450,z:200,r:30});
 
 function reset(afterGoal=false){
   const pos=[[250,270],[180,165],[180,375],[710,270],[780,165],[780,375]];
@@ -94,7 +94,7 @@ function updatePlayer(p,dt){p.attackCd=Math.max(0,p.attackCd-dt);p.tossCd=Math.m
 }
 function readInput(){let x=input.x,y=input.y;if(keys.has('a')||keys.has('arrowleft'))x-=1;if(keys.has('d')||keys.has('arrowright'))x+=1;if(keys.has('w')||keys.has('arrowup'))y-=1;if(keys.has('s')||keys.has('arrowdown'))y+=1;const n=Math.hypot(x,y);if(n>1){x/=n;y/=n}const out={x,y,a:input.aTap||keys.has('j'),b:input.bTap||keys.has('k'),c:input.cTap||keys.has('l')};input.aTap=input.bTap=input.cTap=false;return out;}
 function updateBall(dt){if(ball.owner)return;ball.kickTimer=Math.max(0,ball.kickTimer-dt);ball.trails.push({x:ball.x,y:ball.y,z:ball.z,t:.25});if(ball.trails.length>18)ball.trails.shift();ball.trails.forEach(t=>t.t-=dt);
-  ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;ball.z+=ball.vz*dt;ball.vz-=720*dt;ball.vx*=Math.pow(.995,dt*60);ball.vy*=Math.pow(.995,dt*60);
+  ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;ball.z+=ball.vz*dt;if(ball.z>260){ball.z=260;if(ball.vz>0)ball.vz=0;}ball.vz-=720*dt;ball.vx*=Math.pow(.995,dt*60);ball.vy*=Math.pow(.995,dt*60);
   if(ball.z<0){ball.z=0;ball.vz=Math.abs(ball.vz)*.42;if(Math.abs(ball.vz)<35)ball.vz=0;ball.vx*=.91;ball.vy*=.91;}
   if(ball.x<M){ball.x=M;ball.vx=Math.abs(ball.vx)*.72}if(ball.x>W-M){ball.x=W-M;ball.vx=-Math.abs(ball.vx)*.72}if(ball.y<M){ball.y=M;ball.vy=Math.abs(ball.vy)*.72}if(ball.y>FLOOR){ball.y=FLOOR;ball.vy=-Math.abs(ball.vy)*.72}
   for(const p of players){if(p.stun<=0&&ball.z<34&&dist(p,ball)<28&&Math.hypot(ball.vx,ball.vy)<260){possess(p);break;}}
