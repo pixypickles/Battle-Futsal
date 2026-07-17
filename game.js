@@ -32,7 +32,7 @@
 
   class Actor {
     constructor(x,y,team,isPlayer=false,role='striker'){
-      Object.assign(this,{x,y,team,isPlayer,role,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0});
+      Object.assign(this,{x,y,team,isPlayer,role,vx:0,vy:0,r:23,stun:0,coolA:0,coolB:0,guard:false,hasBall:false,holdA:false,holdB:false,chargeA:0,chargeB:0,attackAnim:0});
       this.speed = isPlayer ? 225 : role==='support' ? 202 : 208;
       this.facing = team==='blue' ? -Math.PI/2 : Math.PI/2;
       this.aiThink = Math.random()*.15;
@@ -41,6 +41,7 @@
       this.stun=Math.max(0,this.stun-dt);
       this.coolA=Math.max(0,this.coolA-dt);
       this.coolB=Math.max(0,this.coolB-dt);
+      this.attackAnim=Math.max(0,this.attackAnim-dt);
       this.guard=false;
       if(this.stun>0){
         this.holdB=false; this.chargeB=0;
@@ -193,8 +194,8 @@
         this.guard=true;
       }
     }
-    slash(){ if(this.coolA>0||this.stun>0)return; this.coolA=.48; strike(this,91,.58,430,'SLASH'); pokeBall(this,185); }
-    bash(){ if(this.coolB>0||this.stun>0)return; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.82,620,'BASH'); pokeBall(this,280); }
+    slash(){ if(this.coolA>0||this.stun>0)return; this.coolA=.56; this.attackAnim=.30; strike(this,96,1.12,165,'SLASH'); pokeBall(this,195); }
+    bash(){ if(this.coolB>0||this.stun>0)return; this.coolB=1.05; this.vx+=Math.cos(this.facing)*330; this.vy+=Math.sin(this.facing)*330; strike(this,78,.34,720,'BASH'); pokeBall(this,280); }
     pass(charge=0){
       if(!this.hasBall||this.coolA>0)return;
       this.coolA=.34;
@@ -269,8 +270,8 @@
     target.x+=n.x*12; target.y+=n.y*12;
     if(target.hasBall)dropBall(target,force*.95);
     effects.push({x:target.x,y:target.y,z:38,t:.28,label});
-    shake=Math.max(shake,label==='BASH'?16:10);
-    hitStop=Math.max(hitStop,label==='BASH'?.075:.045);
+    shake=Math.max(shake,label==='BASH'?18:8);
+    hitStop=Math.max(hitStop,label==='BASH'?.080:.065);
   }
   function pokeBall(actor,speed){
     if(ball.owner||ball.z>24||dist(actor,ball)>82)return;
@@ -504,11 +505,29 @@
     ctx.fillStyle=a.team==='blue'?(a.isPlayer?'#62b8f5':'#88d2ff'):(a.role==='support'?'#ff9292':'#ef6b6b');
     ctx.beginPath();ctx.roundRect(-20,-38,40,45,13);ctx.fill();ctx.stroke();
     ctx.fillStyle='#dce5e8';ctx.beginPath();ctx.arc(0,-44,16,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#26333a';ctx.fillRect(-12,-48,24,6);
-    ctx.fillStyle='#d6a54d';ctx.fillRect(18,-27,8,47);ctx.strokeRect(18,-27,8,47);
+    // The sword is deliberately oversized and animated so the A action reads clearly on a phone.
+    ctx.save();
+    ctx.translate(18,-22);
+    let swordAngle=.16;
+    if(a.attackAnim>0){
+      const progress=1-a.attackAnim/.30;
+      const eased=1-Math.pow(1-clamp(progress,0,1),2);
+      swordAngle=-1.18+eased*2.38;
+      ctx.save();
+      ctx.globalAlpha=.42*(1-progress);
+      ctx.strokeStyle='#fff3b0';ctx.lineWidth=12;ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(0,1,58,-1.18,swordAngle);ctx.stroke();
+      ctx.restore();
+    }
+    ctx.rotate(swordAngle);
+    ctx.fillStyle='#6f4528';ctx.fillRect(-5,-3,10,17);ctx.strokeRect(-5,-3,10,17);
+    ctx.fillStyle='#ead8a7';ctx.beginPath();ctx.roundRect(-7,-52,14,52,5);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#d6a54d';ctx.fillRect(-13,-5,26,7);ctx.strokeRect(-13,-5,26,7);
+    ctx.restore();
     ctx.fillStyle='#aab9c0';ctx.beginPath();ctx.roundRect(-34,-28,17,36,6);ctx.fill();ctx.stroke();
     if(a.role==='support'){ctx.strokeStyle='#ffe36b';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-12,27,0,Math.PI*2);ctx.stroke();}
     if(a.guard){ctx.strokeStyle='#fff';ctx.globalAlpha=.6;ctx.lineWidth=6;ctx.beginPath();ctx.arc(-9,-10,42,-1.1,1.1);ctx.stroke();}
-    if(a.stun>0){ctx.fillStyle='#ffe368';ctx.beginPath();ctx.arc(-12,-68,5,0,7);ctx.arc(4,-74,5,0,7);ctx.arc(17,-65,5,0,7);ctx.fill();}
+    if(a.stun>0){ctx.save();ctx.rotate(-(a.facing+Math.PI/2));ctx.fillStyle='#ffe368';for(let i=0;i<3;i++){const ang=performance.now()*.006+i*Math.PI*2/3;ctx.beginPath();ctx.arc(Math.cos(ang)*22,-72+Math.sin(ang)*7,5,0,Math.PI*2);ctx.fill();}ctx.font='900 12px system-ui';ctx.textAlign='center';ctx.fillText('STUN',0,-91);ctx.restore();}
     if(a.isPlayer&&a.hasBall&&(a.holdA||a.holdB)){
       const q=Math.min(1,(a.holdB?a.chargeB/.52:a.chargeA/.5));
       ctx.rotate(-(a.facing+Math.PI/2));
