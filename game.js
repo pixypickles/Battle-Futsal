@@ -1,6 +1,16 @@
 
 "use strict";
 
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    r=Math.min(r,w/2,h/2);
+    this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);
+    this.arcTo(x,y,x+w,y,r);return this;
+  };
+}
+
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
@@ -40,10 +50,10 @@ const blueScoreEl = document.getElementById("blueScore");
 const redScoreEl = document.getElementById("redScore");
 const statusEl = document.getElementById("status");
 
-const GRAVITY = 0.38;
-const BALL_GRAVITY = 0.18;
+const GRAVITY = 0.31;
+const BALL_GRAVITY = 0.12;
 const FLOOR_BOUNCE = 0.36;
-const MAX_BALL_SPEED = 12.5;
+const MAX_BALL_SPEED = 9.2;
 const KICK_COOLDOWN = 22;
 const ATTACK_COOLDOWN = 40;
 
@@ -146,66 +156,167 @@ class Player {
 
     if(this.anim>0)this.anim--; else this.pose=this.onGround?(Math.abs(this.vx)>1?"run":"idle"):"jump";
   }
+
   draw(){
-    const blue=this.team==="blue";
-    const c=blue?"#2db9ff":"#ff5277";
-    ctx.save();ctx.translate(this.x,this.y);
-    if(this.facing<0)ctx.scale(-1,1);
-
-    // shadow
-    ctx.save();ctx.scale(this.facing<0?-1:1,1);ctx.globalAlpha=.2;ctx.fillStyle="#000";
-    ctx.beginPath();ctx.ellipse(0,arena.floor-this.y+20,27,7,0,0,Math.PI*2);ctx.fill();ctx.restore();
-
-    // scarf / robe
-    ctx.strokeStyle=c;ctx.lineWidth=8;ctx.lineCap="round";
-    if(this.kind==="ninja"){
-      ctx.beginPath();ctx.moveTo(-7,-28);ctx.quadraticCurveTo(-33,-34,-42,-20);ctx.stroke();
-    }
-
-    // body
-    ctx.fillStyle=c;ctx.strokeStyle="#eafaff";ctx.lineWidth=3;
-    ctx.beginPath();ctx.roundRect(-15,-24,30,39,8);ctx.fill();ctx.stroke();
-
-    // head
-    ctx.fillStyle=this.kind==="ninja"?"#132a38":"#f0bf8a";
-    ctx.beginPath();ctx.arc(0,-38,15,0,Math.PI*2);ctx.fill();ctx.stroke();
-    if(this.kind==="ninja"){ctx.fillStyle="#dff7ff";ctx.fillRect(-10,-41,20,5);}
-
-    // arms and legs
-    ctx.strokeStyle="#eafaff";ctx.lineWidth=7;
-    let kick=this.pose==="kick";
-    let air=!this.onGround;
-    ctx.beginPath();
-    if(kick){
-      ctx.moveTo(-8,8);ctx.lineTo(7,17);
-      ctx.moveTo(4,7);ctx.lineTo(32,-2);
-    }else if(air){
-      ctx.moveTo(-7,9);ctx.lineTo(-18,24);
-      ctx.moveTo(5,9);ctx.lineTo(13,25);
-    }else{
-      ctx.moveTo(-7,10);ctx.lineTo(-10,28);
-      ctx.moveTo(7,10);ctx.lineTo(10,28);
-    }
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(-12,-10);ctx.lineTo(-24,-1);
-    ctx.moveTo(12,-10);ctx.lineTo(25,-16);
-    ctx.stroke();
-
-    if(this.kind==="staff"){
-      ctx.strokeStyle="#d29a36";ctx.lineWidth=6;
-      ctx.beginPath();ctx.moveTo(-30,-3);ctx.lineTo(34,-25);ctx.stroke();
-    } else {
-      ctx.fillStyle="#d7e2ea";ctx.beginPath();ctx.moveTo(24,-18);ctx.lineTo(36,-22);ctx.lineTo(29,-12);ctx.closePath();ctx.fill();
-    }
-
-    if(this.wall){
-      ctx.strokeStyle="rgba(255,255,255,.75)";ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(0,0,32,0,Math.PI*2);ctx.stroke();
-    }
-    ctx.restore();
+    drawCharacter(this);
   }
+}
+
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function easeOut(t){ return 1-Math.pow(1-t,3); }
+function limb(x,y,len1,a1,len2,a2,width,color){
+  const x1=x+Math.cos(a1)*len1, y1=y+Math.sin(a1)*len1;
+  const x2=x1+Math.cos(a2)*len2, y2=y1+Math.sin(a2)*len2;
+  ctx.strokeStyle=color; ctx.lineWidth=width; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x2,y2,width*.46,0,Math.PI*2); ctx.fill();
+  return {x:x2,y:y2,kx:x1,ky:y1};
+}
+function poseFor(p){
+  const air=!p.onGround;
+  const phase=(performance.now()/120)%6.28;
+  const t=p.anim>0 ? 1-p.anim/14 : 1;
+  const pose={
+    bodyRot:0, hipY:0, headY:0,
+    armF1:-0.35,armF2:0.1,armB1:-2.8,armB2:-3.0,
+    legF1:1.2,legF2:1.45,legB1:1.9,legB2:1.55,
+    scarf:0.25
+  };
+  if(p.pose==="run"){
+    const s=Math.sin(phase*1.7);
+    pose.bodyRot=s*.06;
+    pose.armF1=-.4-s*.7; pose.armF2=.2-s*.35;
+    pose.armB1=-2.7+s*.7; pose.armB2=-3.0+s*.35;
+    pose.legF1=1.25+s*.65; pose.legF2=1.55+s*.45;
+    pose.legB1=1.9-s*.65; pose.legB2=1.55-s*.45;
+    pose.hipY=Math.abs(s)*2;
+  } else if(p.pose==="kick"){
+    const k=easeOut(clamp(t,0,1));
+    pose.bodyRot=-.20*k;
+    pose.armF1=-.55; pose.armF2=-.15;
+    pose.armB1=-2.55; pose.armB2=-2.8;
+    if(air){
+      pose.legF1=lerp(1.25,-0.08,k);
+      pose.legF2=lerp(1.45,-0.02,k);
+      pose.legB1=2.0; pose.legB2=1.35;
+    }else{
+      pose.legF1=lerp(1.35,-0.03,k);
+      pose.legF2=lerp(1.6,0.02,k);
+      pose.legB1=1.92; pose.legB2=1.52;
+      pose.hipY=3;
+    }
+  } else if(p.pose==="attack"){
+    const k=easeOut(clamp(t,0,1));
+    if(p.kind==="staff"){
+      pose.bodyRot=.22*k;
+      pose.armF1=lerp(-.4,1.15,k); pose.armF2=lerp(.1,1.45,k);
+      pose.armB1=lerp(-2.7,1.75,k); pose.armB2=lerp(-2.95,1.48,k);
+      pose.legF1=1.2; pose.legF2=1.45; pose.legB1=1.95; pose.legB2=1.55;
+    }else{
+      pose.bodyRot=-.25*k;
+      pose.armF1=lerp(-.35,-.03,k); pose.armF2=lerp(.1,-.02,k);
+      pose.armB1=-2.5; pose.armB2=-2.9;
+    }
+  } else if(p.stun>0){
+    pose.bodyRot=.55;
+    pose.armF1=.7;pose.armF2=1.15;pose.armB1=2.3;pose.armB2=1.95;
+    pose.legF1=.75;pose.legF2=1.05;pose.legB1=2.35;pose.legB2=2.0;
+  } else if(p.wall){
+    pose.bodyRot=-p.wall*.25;
+    pose.armF1=-.2;pose.armF2=.45;pose.armB1=-2.85;pose.armB2=-2.35;
+    pose.legF1=.65;pose.legF2=1.2;pose.legB1=2.45;pose.legB2=1.95;
+  } else if(air){
+    if(p.vy<0){
+      pose.bodyRot=-.08;
+      pose.armF1=-.55;pose.armF2=-.15;pose.armB1=-2.55;pose.armB2=-2.9;
+      pose.legF1=.9;pose.legF2=1.55;pose.legB1=2.1;pose.legB2=1.25;
+    }else{
+      pose.bodyRot=.10;
+      pose.armF1=-.25;pose.armF2=.3;pose.armB1=-2.9;pose.armB2=-2.6;
+      pose.legF1=1.05;pose.legF2=1.55;pose.legB1=2.0;pose.legB2=1.4;
+    }
+  } else {
+    const b=Math.sin(phase)*.03;
+    pose.bodyRot=b;pose.hipY=Math.sin(phase)*1.2;
+  }
+  return pose;
+}
+function drawCharacter(p){
+  const teamColor=p.team==="blue"?"#2db9ff":"#ff5277";
+  const dark=p.team==="blue"?"#113c58":"#5c1830";
+  const skin="#f0bf8a";
+  const pose=poseFor(p);
+  ctx.save();
+  ctx.translate(p.x,p.y+pose.hipY);
+  if(p.facing<0)ctx.scale(-1,1);
+
+  // ground shadow
+  ctx.save(); ctx.scale(p.facing<0?-1:1,1);
+  ctx.globalAlpha=.22;ctx.fillStyle="#000";
+  ctx.beginPath();ctx.ellipse(0,arena.floor-p.y+22,28,7,0,0,Math.PI*2);ctx.fill();ctx.restore();
+
+  ctx.rotate(pose.bodyRot);
+
+  // scarf / sash
+  ctx.strokeStyle=teamColor;ctx.lineWidth=7;ctx.lineCap="round";
+  ctx.beginPath();ctx.moveTo(-8,-30);
+  ctx.quadraticCurveTo(-35,-34-p.vx*1.2,-45,-18-p.vy*.15);
+  ctx.stroke();
+
+  // back leg then front leg
+  limb(-7,8,19,pose.legB1,20,pose.legB2,10,"#e9edf2");
+  limb(7,8,20,pose.legF1,21,pose.legF2,11,"#f8fbff");
+
+  // torso
+  ctx.fillStyle=teamColor;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(-16,-27,32,40,8);ctx.fill();ctx.stroke();
+
+  // belt
+  ctx.fillStyle=dark;ctx.fillRect(-17,5,34,7);
+  ctx.fillStyle="#f6cf55";ctx.beginPath();ctx.arc(0,8.5,4,0,Math.PI*2);ctx.fill();
+
+  // back arm then front arm
+  const backHand=limb(-11,-17,15,pose.armB1,15,pose.armB2,8,skin);
+  const frontHand=limb(11,-17,16,pose.armF1,16,pose.armF2,9,skin);
+
+  // head
+  ctx.fillStyle=skin;ctx.strokeStyle="#dff7ff";ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(0,-41,16,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+  // hair / hood
+  ctx.fillStyle=p.kind==="ninja"?"#11232f":"#2b1b17";
+  ctx.beginPath();ctx.arc(0,-45,16,Math.PI,Math.PI*2);ctx.lineTo(15,-38);
+  ctx.quadraticCurveTo(4,-30,-15,-37);ctx.closePath();ctx.fill();
+  if(p.kind==="ninja"){
+    ctx.fillStyle=teamColor;ctx.fillRect(-13,-45,26,5);
+    ctx.fillStyle="#eafaff";ctx.fillRect(-9,-42,18,3);
+  }else{
+    ctx.fillStyle=teamColor;ctx.beginPath();ctx.arc(0,-58,5,0,Math.PI*2);ctx.fill();
+  }
+
+  // eyes
+  ctx.fillStyle="#17212a";ctx.beginPath();ctx.arc(5,-40,2,0,Math.PI*2);ctx.fill();
+
+  // weapon
+  if(p.kind==="staff"){
+    ctx.strokeStyle="#c58a34";ctx.lineWidth=6;ctx.lineCap="round";
+    if(p.pose==="attack"){
+      ctx.beginPath();ctx.moveTo(backHand.x-4,backHand.y-5);ctx.lineTo(frontHand.x+5,frontHand.y+34);ctx.stroke();
+    }else{
+      ctx.beginPath();ctx.moveTo(-32,-6);ctx.lineTo(36,-24);ctx.stroke();
+    }
+  }else{
+    ctx.fillStyle="#dfe8ed";ctx.beginPath();
+    const hx=frontHand.x, hy=frontHand.y;
+    ctx.moveTo(hx,hy);ctx.lineTo(hx+15,hy-3);ctx.lineTo(hx+7,hy+8);ctx.closePath();ctx.fill();
+  }
+
+  if(p.stun>0){
+    ctx.strokeStyle="#ffd94a";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,-68,13,0,Math.PI*1.5);ctx.stroke();
+  }
+  ctx.restore();
 }
 
 class Ball {
@@ -268,8 +379,8 @@ function kickBall(p){
   const dx=ball.x-p.x,dy=ball.y-p.y,d=len(dx,dy);
   if(d<78){
     const air=!p.onGround;
-    const power=air?10.2:8.4;
-    const lift=air?-6.2:-8.8; // 低速で大きな弧を描く
+    const power=air?8.0:6.7;
+    const lift=air?-5.3:-7.4; // 低速で大きな弧を描く
     ball.vx=p.facing*power + p.vx*.55;
     ball.vy=lift + (air?p.vy*.18:0);
     ball.lastTouch=p.team;ball.wallHits=0;
